@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>QuestCraft WebAR - Прототип</title>
+    
+    <!-- A-Frame и AR.js -->
+    <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+    
+    <style>
+        body {
+            margin: 0;
+            overflow: hidden;
+            font-family: 'Segoe UI', Arial, sans-serif;
+        }
+        
+        /* Оверлей с инструкциями */
+        .instructions-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 15px;
+            z-index: 1000;
+            text-align: center;
+            font-size: 14px;
+        }
+        
+        .instructions-overlay h3 {
+            margin: 0 0 8px 0;
+            color: #FFD700;
+            font-size: 16px;
+        }
+        
+        .instructions-overlay p {
+            margin: 0;
+            opacity: 0.9;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 15px;
+            background: none;
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            opacity: 0.7;
+        }
+        
+        .close-btn:hover {
+            opacity: 1;
+        }
+        
+        /* Статус панель */
+        .status-panel {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 25px;
+            z-index: 1000;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .status-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            background: #ff4444;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .status-dot.found {
+            background: #44ff44;
+            animation: none;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Кнопка помощи */
+        .help-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            z-index: 1000;
+        }
+        
+        /* Информация о найденном маркере */
+        .marker-info {
+            position: fixed;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 15px;
+            z-index: 1000;
+            text-align: center;
+            display: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        }
+        
+        .marker-info.visible {
+            display: block;
+            animation: slideDown 0.3s ease;
+        }
+        
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateX(-50%) translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(-50%) translateY(0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Инструкции -->
+    <div class="instructions-overlay" id="instructions">
+        <button class="close-btn" onclick="closeInstructions()">×</button>
+        <h3>🔍 QuestCraft AR Прототип</h3>
+        <p>Наведите камеру на маркер HIRO для активации AR</p>
+    </div>
+    
+    <!-- Кнопка помощи -->
+    <button class="help-btn" onclick="showInstructions()">?</button>
+    
+    <!-- Статус -->
+    <div class="status-panel">
+        <div class="status-dot" id="statusDot"></div>
+        <span id="statusText">Поиск маркера...</span>
+    </div>
+    
+    <!-- Информация о маркере -->
+    <div class="marker-info" id="markerInfo">
+        <strong>✨ Маркер найден!</strong><br>
+        <small>AR-объект активирован</small>
+    </div>
+    
+    <!-- AR Сцена -->
+    <a-scene
+        embedded
+        arjs="sourceType: webcam; debugUIEnabled: false; detectionMode: mono_and_matrix; matrixCodeType: 3x3;"
+        vr-mode-ui="enabled: false"
+        renderer="logarithmicDepthBuffer: true; antialias: true; alpha: true"
+        loading-screen="enabled: false"
+    >
+        <!-- Ассеты (предзагрузка) -->
+        <a-assets>
+            <a-asset-item id="chest-model" src=""></a-asset-item>
+        </a-assets>
+        
+        <!-- Маркер HIRO (стандартный для тестов) -->
+        <a-marker
+            preset="hiro"
+            id="hitoMarker"
+            emitevents="true"
+            smooth="true"
+            smoothCount="10"
+            smoothTolerance="0.01"
+            smoothThreshold="5"
+        >
+            <!-- Основание - светящийся круг -->
+            <a-circle
+                position="0 0.01 0"
+                rotation="-90 0 0"
+                radius="0.5"
+                color="#FFD700"
+                opacity="0.3"
+                animation="property: scale; from: 1 1 1; to: 1.2 1.2 1.2; dur: 1000; easing: easeInOutSine; loop: true; dir: alternate"
+            ></a-circle>
+            
+            <!-- Сундук сокровищ (упрощенная версия из примитивов) -->
+            <a-entity position="0 0.15 0">
+                <!-- Основание сундука -->
+                <a-box
+                    position="0 0 0"
+                    width="0.4"
+                    height="0.25"
+                    depth="0.3"
+                    color="#8B4513"
+                    material="metalness: 0.3; roughness: 0.7"
+                ></a-box>
+                
+                <!-- Крышка сундука (анимированная) -->
+                <a-box
+                    position="0 0.125 -0.12"
+                    width="0.42"
+                    height="0.08"
+                    depth="0.32"
+                    color="#A0522D"
+                    material="metalness: 0.3; roughness: 0.7"
+                    animation="property: rotation; from: 0 0 0; to: -45 0 0; dur: 2000; easing: easeInOutQuad; loop: true; dir: alternate; delay: 500"
+                ></a-box>
+                
+                <!-- Замок -->
+                <a-box
+                    position="0 0.05 0.16"
+                    width="0.08"
+                    height="0.1"
+                    depth="0.02"
+                    color="#FFD700"
+                    material="metalness: 0.8; roughness: 0.2"
+                ></a-box>
+                
+                <!-- Свечение из сундука -->
+                <a-light
+                    type="point"
+                    color="#FFD700"
+                    intensity="0.5"
+                    distance="1"
+                    position="0 0.2 0"
+                    animation="property: intensity; from: 0.3; to: 0.8; dur: 1500; easing: easeInOutSine; loop: true; dir: alternate"
+                ></a-light>
+                
+                <!-- Частицы (звёздочки) -->
+                <a-entity position="0 0.3 0">
+                    <a-sphere
+                        radius="0.02"
+                        color="#FFD700"
+                        position="0.1 0 0"
+                        animation="property: position; from: 0.1 0 0; to: 0.1 0.3 0; dur: 2000; easing: easeOutQuad; loop: true"
+                        animation__fade="property: opacity; from: 1; to: 0; dur: 2000; loop: true"
+                    ></a-sphere>
+                    <a-sphere
+                        radius="0.02"
+                        color="#FFD700"
+                        position="-0.1 0 0.05"
+                        animation="property: position; from: -0.1 0 0.05; to: -0.1 0.25 0.05; dur: 1800; easing: easeOutQuad; loop: true; delay: 300"
+                        animation__fade="property: opacity; from: 1; to: 0; dur: 1800; loop: true; delay: 300"
+                    ></a-sphere>
+                    <a-sphere
+                        radius="0.015"
+                        color="#FFFFFF"
+                        position="0 0 -0.08"
+                        animation="property: position; from: 0 0 -0.08; to: 0 0.35 -0.08; dur: 2200; easing: easeOutQuad; loop: true; delay: 600"
+                        animation__fade="property: opacity; from: 1; to: 0; dur: 2200; loop: true; delay: 600"
+                    ></a-sphere>
+                </a-entity>
+            </a-entity>
+            
+            <!-- Текст подсказки -->
+            <a-text
+                value="Сокровище найдено!"
+                position="0 0.6 0"
+                rotation="-90 0 0"
+                align="center"
+                color="#FFFFFF"
+                width="2"
+                font="mozillavr"
+                animation="property: position; from: 0 0.55 0; to: 0 0.65 0; dur: 1500; easing: easeInOutSine; loop: true; dir: alternate"
+            ></a-text>
+            
+            <!-- Кольцо вокруг объекта -->
+            <a-torus
+                position="0 0.3 0"
+                rotation="90 0 0"
+                radius="0.5"
+                radius-tubular="0.01"
+                color="#FFD700"
+                opacity="0.5"
+                animation="property: rotation; from: 90 0 0; to: 90 360 0; dur: 4000; easing: linear; loop: true"
+            ></a-torus>
+        </a-marker>
+        
+        <!-- Камера -->
+        <a-entity camera></a-entity>
+    </a-scene>
+    
+    <script>
+        // Элементы UI
+        const statusDot = document.getElementById('statusDot');
+        const statusText = document.getElementById('statusText');
+        const markerInfo = document.getElementById('markerInfo');
+        const instructions = document.getElementById('instructions');
+        
+        // Отслеживание маркера
+        const marker = document.querySelector('#hitoMarker');
+        
+        marker.addEventListener('markerFound', () => {
+            console.log('Маркер HIRO найден!');
+            statusDot.classList.add('found');
+            statusText.textContent = 'Маркер обнаружен!';
+            markerInfo.classList.add('visible');
+            
+            // Вибрация на мобильных (если поддерживается)
+            if (navigator.vibrate) {
+                navigator.vibrate(100);
+            }
+        });
+        
+        marker.addEventListener('markerLost', () => {
+            console.log('Маркер потерян');
+            statusDot.classList.remove('found');
+            statusText.textContent = 'Поиск маркера...';
+            markerInfo.classList.remove('visible');
+        });
+        
+        // Управление инструкциями
+        function closeInstructions() {
+            instructions.style.display = 'none';
+        }
+        
+        function showInstructions() {
+            instructions.style.display = 'block';
+        }
+        
+        // Автоскрытие инструкций через 5 секунд
+        setTimeout(() => {
+            closeInstructions();
+        }, 5000);
+        
+        // Логирование для отладки
+        console.log('QuestCraft WebAR Prototype загружен');
+        console.log('Используется AR.js с A-Frame');
+        console.log('Ожидание маркера HIRO...');
+    </script>
+</body>
+</html>
