@@ -1,0 +1,8 @@
+# PPE Detection System - Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ppe-detection
+  labels:
+    app.kubernetes.io/name: ppe-detection
+    app.kubernetes.io/part-of: ppe-system

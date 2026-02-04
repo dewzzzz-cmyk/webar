@@ -1,0 +1,81 @@
+# Kustomization Staging Overlay
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: ppe-detection-staging
+
+resources:
+  - ../../base
+
+namePrefix: staging-
+
+commonLabels:
+  environment: staging
+
+# Staging-specific patches
+patches:
+  # Single replica for staging
+  - patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: api
+
+  - patch: |
+      - op: replace
+        path: /spec/replicas
+        value: 1
+    target:
+      kind: Deployment
+      name: dashboard
+
+  # Lower resource limits for staging
+  - patch: |
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/memory
+        value: "128Mi"
+      - op: replace
+        path: /spec/template/spec/containers/0/resources/requests/cpu
+        value: "100m"
+    target:
+      kind: Deployment
+      name: api
+
+  # Remove GPU requirement for staging (if no GPU available)
+  - patch: |
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/limits/nvidia.com~1gpu
+      - op: remove
+        path: /spec/template/spec/containers/0/resources/requests/nvidia.com~1gpu
+      - op: remove
+        path: /spec/template/spec/nodeSelector
+      - op: remove
+        path: /spec/template/spec/tolerations
+    target:
+      kind: Deployment
+      name: detector
+
+# Staging images
+images:
+  - name: ppe-api
+    newName: your-registry.com/ppe/api
+    newTag: staging
+  - name: ppe-detector
+    newName: your-registry.com/ppe/detector
+    newTag: staging
+  - name: ppe-capture
+    newName: your-registry.com/ppe/capture
+    newTag: staging
+  - name: ppe-dashboard
+    newName: your-registry.com/ppe/dashboard
+    newTag: staging
+
+# Staging ConfigMap
+configMapGenerator:
+  - name: ppe-config
+    behavior: merge
+    literals:
+      - LOG_LEVEL=DEBUG
+      - CONFIDENCE_THRESHOLD=0.3

@@ -1,0 +1,132 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"content": "# 📹 Camera Status\n\nСтатус и метрики камер видеонаблюдения", "mode": "markdown"},
+      "title": "",
+      "type": "text"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "green", "value": 1}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 3},
+      "id": 10,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "targets": [{"expr": "count(ppe_camera_status == 1)", "legendFormat": "Online", "refId": "A"}],
+      "title": "Cameras Online",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "red", "value": 1}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 3},
+      "id": 11,
+      "options": {"colorMode": "value", "graphMode": "none", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "targets": [{"expr": "count(ppe_camera_status == 0)", "legendFormat": "Offline", "refId": "A"}],
+      "title": "Cameras Offline",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "fps", "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "yellow", "value": 3}, {"color": "green", "value": 5}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 3},
+      "id": 12,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["mean"]}},
+      "targets": [{"expr": "avg(ppe_camera_fps)", "legendFormat": "Avg FPS", "refId": "A"}],
+      "title": "Average Camera FPS",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 10}, {"color": "red", "value": 50}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 3},
+      "id": 13,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["sum"]}},
+      "targets": [{"expr": "increase(ppe_camera_errors_total[1h])", "legendFormat": "Errors", "refId": "A"}],
+      "title": "Errors (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"align": "auto", "displayMode": "auto"},
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "🔴 Offline"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "🟢 Online"}}, "type": "value"}
+          ]
+        },
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "Status"}, "properties": [{"id": "custom.width", "value": 100}]},
+          {"matcher": {"id": "byName", "options": "FPS"}, "properties": [{"id": "unit", "value": "fps"}]},
+          {"matcher": {"id": "byName", "options": "Frames"}, "properties": [{"id": "unit", "value": "short"}]},
+          {"matcher": {"id": "byName", "options": "Errors"}, "properties": [{"id": "unit", "value": "short"}]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 7},
+      "id": 20,
+      "options": {"showHeader": true, "sortBy": [{"displayName": "Camera"}]},
+      "targets": [
+        {"expr": "ppe_camera_status", "format": "table", "instant": true, "legendFormat": "", "refId": "A"},
+        {"expr": "ppe_camera_fps", "format": "table", "instant": true, "legendFormat": "", "refId": "B"},
+        {"expr": "ppe_camera_frames_total", "format": "table", "instant": true, "legendFormat": "", "refId": "C"},
+        {"expr": "ppe_camera_errors_total", "format": "table", "instant": true, "legendFormat": "", "refId": "D"}
+      ],
+      "title": "Camera Status Table",
+      "transformations": [
+        {"id": "merge", "options": {}},
+        {"id": "organize", "options": {"excludeByName": {"Time": true, "__name__": true, "instance": true, "job": true}, "renameByName": {"camera_id": "Camera", "Value #A": "Status", "Value #B": "FPS", "Value #C": "Frames", "Value #D": "Errors"}}}
+      ],
+      "type": "table"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "fps"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 17},
+      "id": 30,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [{"expr": "ppe_camera_fps", "legendFormat": "{{camera_id}}", "refId": "A"}],
+      "title": "Camera FPS Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 17},
+      "id": 31,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [{"expr": "rate(ppe_camera_errors_total[5m])", "legendFormat": "{{camera_id}}", "refId": "A"}],
+      "title": "Camera Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "max": 100, "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "yellow", "value": 95}, {"color": "green", "value": 99}]}}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 25},
+      "id": 40,
+      "options": {"displayMode": "lcd", "orientation": "horizontal", "reduceOptions": {"calcs": ["mean"]}},
+      "targets": [{"expr": "avg_over_time(ppe_camera_status[24h]) * 100", "legendFormat": "{{camera_id}}", "refId": "A"}],
+      "title": "Camera Uptime (24h)",
+      "type": "bargauge"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["ppe", "cameras", "status"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "PPE Camera Status",
+  "uid": "ppe-camera-status",
+  "version": 1
+}

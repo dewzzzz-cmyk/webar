@@ -1,0 +1,42 @@
+# PPE Detection System - ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: ppe-config
+  namespace: ppe-detection
+data:
+  # Postgres
+  POSTGRES_DB: "ppe_detection"
+  POSTGRES_USER: "ppe"
+  
+  # Redis
+  REDIS_URL: "redis://redis:6379"
+  
+  # API
+  API_HOST: "0.0.0.0"
+  API_PORT: "8000"
+  LOG_LEVEL: "INFO"
+  
+  # Detector
+  MODEL_PATH: "/models/ppe_model.pt"
+  CONFIDENCE_THRESHOLD: "0.5"
+  COOLDOWN_SECONDS: "60"
+  
+  # Capture
+  FRAME_RATE: "5"
+  
+---
+# PPE Detection System - Secrets
+# NOTE: В production используйте external-secrets или sealed-secrets!
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ppe-secrets
+  namespace: ppe-detection
+type: Opaque
+stringData:
+  # CHANGE THESE IN PRODUCTION!
+  POSTGRES_PASSWORD: "ppe_secret_change_me"
+  JWT_SECRET: "change_this_to_a_very_long_random_string_at_least_64_characters"
+  TELEGRAM_BOT_TOKEN: ""
+  TELEGRAM_CHAT_ID: ""

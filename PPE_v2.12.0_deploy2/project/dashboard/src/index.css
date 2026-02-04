@@ -1,0 +1,289 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 249 250 251;
+    --foreground: 17 24 39;
+    --card: 255 255 255;
+    --card-foreground: 17 24 39;
+    --primary: 59 130 246;
+    --primary-foreground: 255 255 255;
+    --danger: 239 68 68;
+    --warning: 249 115 22;
+    --success: 34 197 94;
+  }
+
+  * {
+    @apply border-gray-200;
+  }
+
+  body {
+    @apply bg-gray-50 text-gray-900 antialiased;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+
+  /* Visible focus for keyboard users - A11y fix */
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+  }
+
+  /* Remove outline for mouse users */
+  :focus:not(:focus-visible) {
+    @apply outline-none;
+  }
+
+  /* Screen reader only utility */
+  .sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .sr-only:focus,
+  .not-sr-only:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    padding: inherit;
+    margin: inherit;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+  }
+}
+
+@layer components {
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 text-sm font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-primary {
+    @apply btn bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500;
+  }
+
+  .btn-danger {
+    @apply btn bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500;
+  }
+
+  .btn-outline {
+    @apply btn border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-primary-500;
+  }
+
+  .btn-ghost {
+    @apply btn text-gray-600 hover:bg-gray-100 focus:ring-gray-500;
+  }
+
+  .card {
+    @apply bg-white rounded-xl border border-gray-200 shadow-sm;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-primary-500 focus:outline-none focus:ring-2 focus:ring-primary-500/20;
+  }
+
+  .badge {
+    @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-danger {
+    @apply badge bg-danger-100 text-danger-700;
+  }
+
+  .badge-warning {
+    @apply badge bg-warning-100 text-warning-700;
+  }
+
+  .badge-success {
+    @apply badge bg-success-100 text-success-700;
+  }
+
+  .badge-primary {
+    @apply badge bg-primary-100 text-primary-700;
+  }
+}
+
+/* Animations */
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out;
+}
+
+@keyframes pulse-fast {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse-fast {
+  animation: pulse-fast 1s ease-in-out infinite;
+}
+
+/* A11y: Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* A11y: Focus visible styles for keyboard navigation */
+:focus-visible {
+  @apply outline-none ring-2 ring-primary-500 ring-offset-2;
+}
+
+:focus:not(:focus-visible) {
+  @apply outline-none ring-0;
+}
+
+/* Screen reader only utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.sr-only:focus,
+.not-sr-only {
+  position: static;
+  width: auto;
+  height: auto;
+  padding: inherit;
+  margin: inherit;
+  overflow: visible;
+  clip: auto;
+  white-space: normal;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* ============================================
+   ACCESSIBILITY IMPROVEMENTS
+   ============================================ */
+
+/* Visible focus for keyboard users */
+:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #3b82f6;
+  border-radius: 4px;
+}
+
+/* Remove outline for mouse users */
+:focus:not(:focus-visible) {
+  outline: none;
+  box-shadow: none;
+}
+
+/* Skip link - visible only on focus */
+.skip-link {
+  position: absolute;
+  top: -100px;
+  left: 16px;
+  z-index: 100;
+  padding: 8px 16px;
+  background: #3b82f6;
+  color: white;
+  border-radius: 8px;
+  font-weight: 500;
+  text-decoration: none;
+  transition: top 0.2s;
+}
+
+.skip-link:focus {
+  top: 16px;
+}
+
+/* Screen reader only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Respect reduced motion preference */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  
+  .animate-spin,
+  .animate-pulse,
+  .animate-pulse-fast,
+  .animate-slide-in {
+    animation: none !important;
+  }
+}
+
+/* Respect user preference for reduced motion - A11y fix */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Pulse animation for alerts */
+.animate-pulse-fast {
+  animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}

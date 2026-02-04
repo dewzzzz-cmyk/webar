@@ -1,0 +1,125 @@
+# Detector Deployment (GPU enabled)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: detector
+  namespace: ppe-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: detector
+  template:
+    metadata:
+      labels:
+        app: detector
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      containers:
+        - name: detector
+          image: ppe-detector:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9100
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: REDIS_URL
+            - name: MODEL_PATH
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: MODEL_PATH
+            - name: CONFIDENCE_THRESHOLD
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: CONFIDENCE_THRESHOLD
+            - name: DATABASE_URL
+              value: "postgresql://$(POSTGRES_USER):$(POSTGRES_PASSWORD)@postgres:5432/$(POSTGRES_DB)"
+            - name: POSTGRES_USER
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: POSTGRES_USER
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: POSTGRES_DB
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ppe-secrets
+                  key: POSTGRES_PASSWORD
+          volumeMounts:
+            - name: models
+              mountPath: /models
+            - name: dshm
+              mountPath: /dev/shm
+          resources:
+            requests:
+              memory: "2Gi"
+              cpu: "1000m"
+              nvidia.com/gpu: "1"  # Request GPU
+            limits:
+              memory: "8Gi"
+              cpu: "4000m"
+              nvidia.com/gpu: "1"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9100
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: 9100
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: models-pvc
+        - name: dshm  # Shared memory for PyTorch
+          emptyDir:
+            medium: Memory
+            sizeLimit: 2Gi
+      # GPU node selector
+      nodeSelector:
+        nvidia.com/gpu.present: "true"
+      tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+          effect: NoSchedule
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: detector
+  namespace: ppe-detection
+spec:
+  selector:
+    app: detector
+  ports:
+    - port: 9100
+      targetPort: 9100
+---
+# PVC for models
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: models-pvc
+  namespace: ppe-detection
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi

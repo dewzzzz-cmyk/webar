@@ -1,0 +1,19 @@
+# Training Service Dependencies
+
+# Celery + Redis
+celery[redis]==5.3.6
+redis==5.0.1
+
+# Database
+psycopg2-binary==2.9.9
+
+# Machine Learning (torch/torchvision already in base image!)
+ultralytics>=8.3.0
+
+# Image Processing
+opencv-python-headless>=4.8.0
+pillow>=10.0.0
+numpy>=1.24.0
+
+# Utils
+pyyaml>=6.0

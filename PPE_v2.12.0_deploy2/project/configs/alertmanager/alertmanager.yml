@@ -1,0 +1,91 @@
+# Alertmanager Configuration for PPE Detection System
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+  
+  routes:
+    # Critical alerts - immediate notification
+    - match:
+        severity: critical
+      receiver: 'telegram-critical'
+      group_wait: 10s
+      repeat_interval: 1h
+    
+    # Warning alerts
+    - match:
+        severity: warning
+      receiver: 'telegram-warnings'
+      group_wait: 1m
+      repeat_interval: 4h
+    
+    # Info alerts - less urgent
+    - match:
+        severity: info
+      receiver: 'telegram-info'
+      group_wait: 5m
+      repeat_interval: 12h
+
+receivers:
+  - name: 'default'
+    # Default receiver - можно добавить email/slack
+
+  - name: 'telegram-critical'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: ${TELEGRAM_CHAT_ID}
+        api_url: 'https://api.telegram.org'
+        parse_mode: 'HTML'
+        message: |
+          🚨 <b>КРИТИЧЕСКИЙ АЛЕРТ</b>
+          
+          <b>{{ .CommonLabels.alertname }}</b>
+          {{ range .Alerts }}
+          ⚠️ {{ .Annotations.summary }}
+          📝 {{ .Annotations.description }}
+          🏷️ Severity: {{ .Labels.severity }}
+          ⏰ Время: {{ .StartsAt.Format "02.01.2006 15:04:05" }}
+          {{ end }}
+          
+          #ppe #critical
+
+  - name: 'telegram-warnings'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: ${TELEGRAM_CHAT_ID}
+        api_url: 'https://api.telegram.org'
+        parse_mode: 'HTML'
+        message: |
+          ⚠️ <b>Предупреждение</b>
+          
+          <b>{{ .CommonLabels.alertname }}</b>
+          {{ range .Alerts }}
+          📝 {{ .Annotations.summary }}
+          {{ end }}
+
+  - name: 'telegram-info'
+    telegram_configs:
+      - bot_token: '${TELEGRAM_BOT_TOKEN}'
+        chat_id: ${TELEGRAM_CHAT_ID}
+        api_url: 'https://api.telegram.org'
+        parse_mode: 'HTML'
+        message: |
+          ℹ️ <b>Информация</b>
+          
+          {{ range .Alerts }}
+          {{ .Annotations.summary }}
+          {{ end }}
+
+inhibit_rules:
+  # Подавлять warning если есть critical от того же источника
+  - source_match:
+      severity: 'critical'
+    target_match:
+      severity: 'warning'
+    equal: ['alertname', 'instance']

@@ -1,0 +1,51 @@
+# Конфигурация камер для PPE Detection System
+# 
+# Поддерживаемые источники:
+# - RTSP: rtsp://user:password@ip:port/stream
+# - HTTP: http://ip:port/video
+# - Веб-камера: 0, 1, 2... (индекс устройства)
+# - Видеофайл: /path/to/video.mp4
+#
+# Камеры добавляются через веб-интерфейс: Настройки → Камеры → Добавить камеру
+
+cameras:
+  # ============================================================================
+  # ТЕСТОВЫЕ КАМЕРЫ (публичные RTSP потоки для демонстрации)
+  # ============================================================================
+  
+  - id: test-wowza-1
+    name: "Тест Wowza #1"
+    url: "rtsp://716f898c7b71.entrypoint.cloud.wowza.com:1935/app-8F9K44lJ/304679fe_stream2"
+    enabled: true
+    fps: 5
+    
+  - id: test-wowza-2
+    name: "Тест Wowza #2"
+    url: "rtsp://807e9439d5ca.entrypoint.cloud.wowza.com:1935/app-rC94792j/068b9c9a_stream2"
+    enabled: true
+    fps: 5
+
+# ============================================================================
+# Примеры RTSP URL для разных производителей:
+# ============================================================================
+#
+# Hikvision:
+#   rtsp://user:pass@ip:554/Streaming/Channels/101  (основной поток)
+#   rtsp://user:pass@ip:554/Streaming/Channels/102  (дополнительный поток)
+#
+# Dahua:
+#   rtsp://user:pass@ip:554/cam/realmonitor?channel=1&subtype=0  (основной)
+#   rtsp://user:pass@ip:554/cam/realmonitor?channel=1&subtype=1  (доп.)
+#
+# Axis:
+#   rtsp://user:pass@ip/axis-media/media.amp
+#
+# Uniview:
+#   rtsp://user:pass@ip:554/video1
+#
+# Reolink:
+#   rtsp://user:pass@ip:554/h264Preview_01_main
+#
+# Tapo (TP-Link):
+#   rtsp://user:pass@ip:554/stream1
+#

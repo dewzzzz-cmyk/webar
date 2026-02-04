@@ -1,0 +1,117 @@
+# Pod Security Standards - Restricted Profile
+# Apply to all pods for enhanced security
+
+---
+# Pod Security Policy (deprecated but still used in some clusters)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: ppe-restricted
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: MustRunAsNonRoot
+  runAsGroup:
+    rule: MustRunAs
+    ranges:
+      - min: 1000
+        max: 65535
+  fsGroup:
+    rule: MustRunAs
+    ranges:
+      - min: 1000
+        max: 65535
+  seLinux:
+    rule: RunAsAny
+  supplementalGroups:
+    rule: MustRunAs
+    ranges:
+      - min: 1000
+        max: 65535
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  readOnlyRootFilesystem: true
+  requiredDropCapabilities:
+    - ALL
+
+---
+# RBAC for PodSecurityPolicy
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ppe-restricted-psp
+rules:
+  - apiGroups: ['policy']
+    resources: ['podsecuritypolicies']
+    verbs: ['use']
+    resourceNames: ['ppe-restricted']
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ppe-restricted-psp-binding
+  namespace: ppe-detection
+roleRef:
+  kind: ClusterRole
+  name: ppe-restricted-psp
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: ppe-detection
+
+---
+# LimitRange for resource constraints
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ppe-limit-range
+  namespace: ppe-detection
+spec:
+  limits:
+    - type: Container
+      default:
+        memory: "512Mi"
+        cpu: "500m"
+      defaultRequest:
+        memory: "128Mi"
+        cpu: "100m"
+      max:
+        memory: "8Gi"
+        cpu: "4"
+      min:
+        memory: "64Mi"
+        cpu: "50m"
+    - type: Pod
+      max:
+        memory: "16Gi"
+        cpu: "8"
+
+---
+# ResourceQuota for namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ppe-resource-quota
+  namespace: ppe-detection
+spec:
+  hard:
+    requests.cpu: "10"
+    requests.memory: "20Gi"
+    limits.cpu: "20"
+    limits.memory: "40Gi"
+    pods: "50"
+    persistentvolumeclaims: "10"
+    services: "20"
+    secrets: "50"
+    configmaps: "50"

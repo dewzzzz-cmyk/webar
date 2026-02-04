@@ -1,0 +1,462 @@
+services:
+  # ============================================================================
+  # INFRASTRUCTURE
+  # ============================================================================
+  
+  redis:
+    image: redis:7-alpine
+    container_name: ppe_redis
+    restart: unless-stopped
+    # SECURITY: No external port exposure - internal network only
+    # ports:
+    #   - "6379:6379"  # REMOVED for security
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ppe_network
+
+  postgres:
+    image: postgres:15-alpine
+    container_name: ppe_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ppe}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ppe_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-ppe_detection}
+    # SECURITY: No external port exposure - internal network only
+    # ports:
+    #   - "5432:5432"  # REMOVED for security
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/01_init.sql
+      - ./scripts/init_training_db.sql:/docker-entrypoint-initdb.d/02_training.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ppe -d ppe_detection"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - ppe_network
+
+  # MinIO Object Storage (для изображений обучения)
+  minio:
+    image: minio/minio:latest
+    container_name: ppe_minio
+    restart: unless-stopped
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - ppe_network
+
+  # ============================================================================
+  # APPLICATION SERVICES
+  # ============================================================================
+
+  capture:
+    build:
+      context: ./services/capture
+      dockerfile: Dockerfile
+    container_name: ppe_capture
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - CONFIG_PATH=/app/configs/cameras.yaml
+      # RTSP оптимизация (v2.10.50) - уменьшаем задержку и артефакты
+      - OPENCV_FFMPEG_CAPTURE_OPTIONS=rtsp_transport;tcp|fflags;nobuffer|flags;low_delay|max_delay;500000
+      - JPEG_QUALITY=85
+      - MAX_FRAME_SIZE=1280
+    volumes:
+      - ./configs:/app/configs:ro
+    networks:
+      - ppe_network
+
+  detector:
+    build:
+      context: ./services/detector
+      dockerfile: Dockerfile
+    container_name: ppe_detector
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://ppe:ppe_secret@postgres:5432/ppe_detection
+      - MODEL_PATH=/app/models/ppe_model.pt
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.5}
+      - DETECT_EVERY_N=${DETECT_EVERY_N:-2}
+    volumes:
+      - ./models:/app/models:ro
+      - ./configs:/app/configs:ro
+      - violation_images:/app/violations
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - ppe_network
+
+  # Версия без GPU (для тестирования)
+  detector-cpu:
+    build:
+      context: ./services/detector
+      dockerfile: Dockerfile.cpu
+    container_name: ppe_detector_cpu
+    restart: unless-stopped
+    profiles:
+      - cpu
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://ppe:ppe_secret@postgres:5432/ppe_detection
+      - MODEL_PATH=/app/models/ppe_model.pt
+      - CONFIDENCE_THRESHOLD=${CONFIDENCE_THRESHOLD:-0.5}
+    volumes:
+      - ./models:/app/models:ro
+      - ./configs:/app/configs:ro
+      - violation_images:/app/violations
+    networks:
+      - ppe_network
+
+  api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    container_name: ppe_api
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - DATABASE_URL=postgresql://ppe:ppe_secret@postgres:5432/ppe_detection
+      - JWT_SECRET=${JWT_SECRET:-your-secret-key-change-in-production}
+      - CORS_ORIGINS=${CORS_ORIGINS:-*}
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - TRAINING_IMAGES_PATH=/app/training_data/images
+      - TRAINING_MODELS_PATH=/app/training_data/models
+    ports:
+      - "8000:8000"
+    volumes:
+      - violation_images:/app/violations:ro
+      - ./configs:/app/configs
+      - training_data:/app/training_data
+      - datasets_data:/app/datasets
+      - ./models:/app/models
+      - ./VERSION:/app/VERSION:ro
+    networks:
+      - ppe_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  alerter:
+    build:
+      context: ./services/alerter
+      dockerfile: Dockerfile
+    container_name: ppe_alerter
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ALERT_COOLDOWN=${ALERT_COOLDOWN:-30}
+    volumes:
+      - violation_images:/app/violations:ro
+      - ./configs:/app/configs:ro
+    networks:
+      - ppe_network
+
+  # ============================================================================
+  # WEB DASHBOARD
+  # ============================================================================
+
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: ppe_dashboard
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3001:80"
+    networks:
+      - ppe_network
+
+  # ============================================================================
+  # TELEGRAM BOT
+  # ============================================================================
+
+  telegram-bot:
+    build:
+      context: ./services/telegram_bot
+      dockerfile: Dockerfile
+    container_name: ppe_telegram_bot
+    restart: unless-stopped
+    environment:
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - ALLOWED_CHAT_IDS=${TELEGRAM_CHAT_ID}
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ppe}:${POSTGRES_PASSWORD:-ppe_secret}@postgres:5432/${POSTGRES_DB:-ppe_detection}
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      - redis
+      - postgres
+    networks:
+      - ppe_network
+
+  # ============================================================================
+  # MONITORING STACK
+  # ============================================================================
+
+  prometheus:
+    image: prom/prometheus:v2.47.0
+    container_name: ppe_prometheus
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./configs/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./configs/prometheus/rules:/etc/prometheus/rules:ro
+      - prometheus_data:/prometheus
+    networks:
+      - ppe_network
+
+  grafana:
+    image: grafana/grafana:10.2.0
+    container_name: ppe_grafana
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    ports:
+      - "3002:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=${GRAFANA_ROOT_URL:-http://localhost:3002}
+      - GF_INSTALL_PLUGINS=grafana-clock-panel,grafana-piechart-panel
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./configs/grafana/provisioning:/etc/grafana/provisioning:ro
+    depends_on:
+      - prometheus
+    networks:
+      - ppe_network
+
+  # Redis Exporter
+  redis-exporter:
+    image: oliver006/redis_exporter:v1.55.0
+    container_name: ppe_redis_exporter
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    environment:
+      - REDIS_ADDR=redis://redis:6379
+    ports:
+      - "9121:9121"
+    depends_on:
+      - redis
+    networks:
+      - ppe_network
+
+  # PostgreSQL Exporter
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    container_name: ppe_postgres_exporter
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRES_USER:-ppe}:${POSTGRES_PASSWORD:-ppe_secret}@postgres:5432/${POSTGRES_DB:-ppe_detection}?sslmode=disable
+    ports:
+      - "9187:9187"
+    depends_on:
+      - postgres
+    networks:
+      - ppe_network
+
+  # Node Exporter (system metrics)
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: ppe_node_exporter
+    profiles:
+      - monitoring
+    restart: unless-stopped
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+      - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
+    networks:
+      - ppe_network
+
+  # Alertmanager (опционально)
+  alertmanager:
+    image: prom/alertmanager:v0.26.0
+    container_name: ppe_alertmanager
+    profiles:
+      - monitoring
+      - alerting
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./configs/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager_data:/alertmanager
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    networks:
+      - ppe_network
+
+  # ============================================================================
+  # TRAINING SERVICE (Phase 2)
+  # ============================================================================
+  
+  # Training Worker (Celery + YOLOv8 GPU)
+  training:
+    build:
+      context: ./services/training
+      dockerfile: Dockerfile
+    container_name: ppe_training
+    # Запускается вместе с detector (GPU mode)
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ppe}:${POSTGRES_PASSWORD:-ppe_secret}@postgres:5432/${POSTGRES_DB:-ppe_detection}
+      - TRAINING_DATA_PATH=/app/training_data
+      - MODELS_PATH=/app/models
+      - BASE_MODEL=yolov8n.pt
+    volumes:
+      - training_data:/app/training_data
+      - datasets_data:/app/datasets
+      - ./models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    networks:
+      - ppe_network
+    healthcheck:
+      test: ["CMD", "celery", "-A", "worker", "inspect", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # Training Worker CPU-only version
+  training-cpu:
+    build:
+      context: ./services/training
+      dockerfile: Dockerfile
+    container_name: ppe_training_cpu
+    profiles:
+      - cpu
+    restart: unless-stopped
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-ppe}:${POSTGRES_PASSWORD:-ppe_secret}@postgres:5432/${POSTGRES_DB:-ppe_detection}
+      - TRAINING_DATA_PATH=/app/training_data
+      - MODELS_PATH=/app/models
+      - BASE_MODEL=yolov8n.pt
+      - CUDA_VISIBLE_DEVICES=""
+    volumes:
+      - training_data:/app/training_data
+      - datasets_data:/app/datasets
+      - ./models:/app/models
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - ppe_network
+
+# ============================================================================
+# NETWORKS & VOLUMES
+# ============================================================================
+
+networks:
+  ppe_network:
+    driver: bridge
+
+volumes:
+  redis_data:
+  postgres_data:
+  violation_images:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  minio_data:
+  training_data:
+  datasets_data:

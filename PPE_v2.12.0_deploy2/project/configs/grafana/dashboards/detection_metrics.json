@@ -1,0 +1,130 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 0,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "gridPos": {"h": 3, "w": 24, "x": 0, "y": 0},
+      "id": 1,
+      "options": {"content": "# 🔍 Detection Metrics\n\nМетрики детекции нарушений СИЗ", "mode": "markdown"},
+      "title": "",
+      "type": "text"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 0, "y": 3},
+      "id": 10,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "targets": [{"expr": "increase(ppe_violations_total[24h])", "legendFormat": "Violations", "refId": "A"}],
+      "title": "Violations (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "fps", "thresholds": {"mode": "absolute", "steps": [{"color": "red"}, {"color": "yellow", "value": 3}, {"color": "green", "value": 5}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 6, "y": 3},
+      "id": 11,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "targets": [{"expr": "rate(ppe_detector_frames_total[1m])", "legendFormat": "FPS", "refId": "A"}],
+      "title": "Detection FPS",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 100}, {"color": "red", "value": 500}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 12, "y": 3},
+      "id": 12,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["mean"]}},
+      "targets": [{"expr": "ppe_detector_inference_seconds * 1000", "legendFormat": "Inference", "refId": "A"}],
+      "title": "Avg Inference Time",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 50}, {"color": "red", "value": 100}]}}},
+      "gridPos": {"h": 4, "w": 6, "x": 18, "y": 3},
+      "id": 13,
+      "options": {"colorMode": "value", "graphMode": "area", "justifyMode": "auto", "reduceOptions": {"calcs": ["lastNotNull"]}},
+      "targets": [{"expr": "ppe_detector_queue_length", "legendFormat": "Queue", "refId": "A"}],
+      "title": "Queue Length",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 7},
+      "id": 20,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "increase(ppe_violations_total{type=\"no_hardhat\"}[1h])", "legendFormat": "Без каски", "refId": "A"},
+        {"expr": "increase(ppe_violations_total{type=\"no_vest\"}[1h])", "legendFormat": "Без жилета", "refId": "B"},
+        {"expr": "increase(ppe_violations_total{type=\"no_glasses\"}[1h])", "legendFormat": "Без очков", "refId": "C"}
+      ],
+      "title": "Violations by Type (per hour)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "fps"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 7},
+      "id": 21,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(ppe_detector_frames_total[1m])", "legendFormat": "Detection FPS", "refId": "A"},
+        {"expr": "rate(ppe_capture_frames_total[1m])", "legendFormat": "Capture FPS", "refId": "B"}
+      ],
+      "title": "Processing FPS",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "ms"}},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 15},
+      "id": 30,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(ppe_detector_inference_seconds_bucket[5m])) * 1000", "legendFormat": "p50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, rate(ppe_detector_inference_seconds_bucket[5m])) * 1000", "legendFormat": "p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, rate(ppe_detector_inference_seconds_bucket[5m])) * 1000", "legendFormat": "p99", "refId": "C"}
+      ],
+      "title": "Inference Time Percentiles",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 15},
+      "id": 31,
+      "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+      "targets": [{"expr": "ppe_detector_queue_length", "legendFormat": "Queue", "refId": "A"}],
+      "title": "Queue Length Over Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "custom": {"fillOpacity": 80}}},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 23},
+      "id": 40,
+      "options": {"legend": {"displayMode": "table", "placement": "right", "showLegend": true}},
+      "targets": [{"expr": "increase(ppe_violations_total[1h])", "legendFormat": "{{camera_id}} - {{type}}", "refId": "A"}],
+      "title": "Violations by Camera and Type",
+      "type": "barchart"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["ppe", "detection", "metrics"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "PPE Detection Metrics",
+  "uid": "ppe-detection-metrics",
+  "version": 1
+}

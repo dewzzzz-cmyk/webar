@@ -1,0 +1,70 @@
+# Ingress for external access
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ppe-ingress
+  namespace: ppe-detection
+  annotations:
+    kubernetes.io/ingress.class: nginx
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    # WebSocket support
+    nginx.ingress.kubernetes.io/websocket-services: "api"
+    # SSL redirect
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # Rate limiting
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/limit-connections: "50"
+    # Security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      add_header X-Frame-Options "DENY" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+spec:
+  tls:
+    - hosts:
+        - ppe.example.com
+      secretName: ppe-tls-secret
+  rules:
+    - host: ppe.example.com
+      http:
+        paths:
+          # Dashboard (frontend)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: dashboard
+                port:
+                  number: 80
+          # API
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+          # WebSocket
+          - path: /ws
+            pathType: Prefix
+            backend:
+              service:
+                name: api
+                port:
+                  number: 8000
+---
+# Certificate (cert-manager)
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: ppe-tls
+  namespace: ppe-detection
+spec:
+  secretName: ppe-tls-secret
+  issuerRef:
+    name: letsencrypt-prod
+    kind: ClusterIssuer
+  dnsNames:
+    - ppe.example.com

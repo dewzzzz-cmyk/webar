@@ -1,0 +1,103 @@
+# Docker Compose for Integration Testing
+# Запуск: docker-compose -f docker-compose.test.yml up -d
+
+version: '3.8'
+
+services:
+  # ============================================================================
+  # TEST DATABASE
+  # ============================================================================
+  test-postgres:
+    image: postgres:15-alpine
+    container_name: ppe_test_postgres
+    environment:
+      POSTGRES_USER: ppe_test
+      POSTGRES_PASSWORD: ppe_test_secret
+      POSTGRES_DB: ppe_test_db
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./scripts/init_db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ppe_test -d ppe_test_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test_network
+
+  # ============================================================================
+  # TEST REDIS
+  # ============================================================================
+  test-redis:
+    image: redis:7-alpine
+    container_name: ppe_test_redis
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test_network
+
+  # ============================================================================
+  # API SERVICE (for testing)
+  # ============================================================================
+  test-api:
+    build:
+      context: ./services/api
+      dockerfile: Dockerfile
+    container_name: ppe_test_api
+    environment:
+      - DATABASE_URL=postgresql://ppe_test:ppe_test_secret@test-postgres:5432/ppe_test_db
+      - REDIS_URL=redis://test-redis:6379
+      - JWT_SECRET=test_jwt_secret_for_integration_testing_only
+      - ENVIRONMENT=test
+      - LOG_LEVEL=DEBUG
+    ports:
+      - "8001:8000"
+    depends_on:
+      test-postgres:
+        condition: service_healthy
+      test-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - test_network
+
+  # ============================================================================
+  # TEST RUNNER
+  # ============================================================================
+  test-runner:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile.test
+    container_name: ppe_test_runner
+    environment:
+      - API_URL=http://test-api:8000
+      - DATABASE_URL=postgresql://ppe_test:ppe_test_secret@test-postgres:5432/ppe_test_db
+      - REDIS_URL=redis://test-redis:6379
+    depends_on:
+      test-api:
+        condition: service_healthy
+    volumes:
+      - ./tests:/app/tests:ro
+      - ./test-results:/app/test-results
+    networks:
+      - test_network
+    command: >
+      pytest tests/integration/ -v 
+      --tb=short 
+      --junitxml=/app/test-results/integration.xml
+      --html=/app/test-results/integration.html
+      --self-contained-html
+
+networks:
+  test_network:
+    driver: bridge

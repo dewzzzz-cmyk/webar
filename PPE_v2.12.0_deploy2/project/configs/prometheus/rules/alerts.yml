@@ -1,0 +1,204 @@
+# Prometheus Alert Rules for PPE Detection System
+
+groups:
+  - name: ppe_system_alerts
+    interval: 30s
+    rules:
+      # ============================================================
+      # SERVICE HEALTH
+      # ============================================================
+      
+      - alert: ServiceDown
+        expr: up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Сервис {{ $labels.job }} недоступен"
+          description: "Сервис {{ $labels.job }} не отвечает более 1 минуты."
+
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="ppe-api"}[5m])) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая задержка API"
+          description: "95-й перцентиль времени ответа API превышает 1 секунду."
+
+      - alert: APIHighErrorRate
+        expr: rate(http_requests_total{job="ppe-api",status=~"5.."}[5m]) / rate(http_requests_total{job="ppe-api"}[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокий уровень ошибок API"
+          description: "Более 5% запросов к API завершаются с ошибкой."
+
+      # ============================================================
+      # DETECTION METRICS
+      # ============================================================
+
+      - alert: DetectorQueueBacklog
+        expr: ppe_detector_queue_length > 100
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Очередь детекции переполнена"
+          description: "В очереди более 100 кадров. Детектор не успевает обрабатывать."
+
+      - alert: DetectorSlowInference
+        expr: ppe_detector_inference_seconds > 0.5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Медленный inference"
+          description: "Время детекции превышает 500ms. Проверьте GPU/CPU."
+
+      - alert: LowDetectionFPS
+        expr: rate(ppe_detector_frames_total[1m]) < 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Низкий FPS детекции"
+          description: "Детектор обрабатывает менее 1 кадра в секунду."
+
+      # ============================================================
+      # CAMERA ALERTS
+      # ============================================================
+
+      - alert: CameraOffline
+        expr: ppe_camera_status == 0
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Камера {{ $labels.camera_id }} offline"
+          description: "Камера {{ $labels.camera_id }} недоступна более 5 минут."
+
+      - alert: CameraHighErrorRate
+        expr: rate(ppe_camera_errors_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ошибки камеры {{ $labels.camera_id }}"
+          description: "Камера {{ $labels.camera_id }} генерирует более 1 ошибки в секунду."
+
+      - alert: CameraLowFPS
+        expr: ppe_camera_fps < 1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Низкий FPS камеры {{ $labels.camera_id }}"
+          description: "Камера {{ $labels.camera_id }} выдаёт менее 1 кадра в секунду."
+
+      # ============================================================
+      # INFRASTRUCTURE
+      # ============================================================
+
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая загрузка CPU"
+          description: "CPU загружен более чем на 80% в течение 10 минут."
+
+      - alert: HighMemoryUsage
+        expr: (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое использование памяти"
+          description: "Использование RAM превышает 85%."
+
+      - alert: DiskSpaceLow
+        expr: (1 - (node_filesystem_avail_bytes{fstype!~"tmpfs|overlay"} / node_filesystem_size_bytes{fstype!~"tmpfs|overlay"})) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Мало места на диске"
+          description: "Диск заполнен более чем на 80%."
+
+      - alert: GPUHighTemperature
+        expr: nvidia_gpu_temperature_celsius > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокая температура GPU"
+          description: "Температура GPU превышает 80°C."
+
+      - alert: GPUHighMemoryUsage
+        expr: (nvidia_gpu_memory_used_bytes / nvidia_gpu_memory_total_bytes) * 100 > 90
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое использование памяти GPU"
+          description: "Использование VRAM превышает 90%."
+
+      # ============================================================
+      # REDIS
+      # ============================================================
+
+      - alert: RedisDown
+        expr: redis_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Redis недоступен"
+          description: "Redis не отвечает более 1 минуты."
+
+      - alert: RedisHighMemory
+        expr: redis_memory_used_bytes / redis_memory_max_bytes * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Высокое использование памяти Redis"
+          description: "Redis использует более 80% выделенной памяти."
+
+      # ============================================================
+      # POSTGRESQL
+      # ============================================================
+
+      - alert: PostgresDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL недоступен"
+          description: "PostgreSQL не отвечает более 1 минуты."
+
+      - alert: PostgresTooManyConnections
+        expr: sum(pg_stat_activity_count) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Много подключений к PostgreSQL"
+          description: "Более 80 активных подключений к базе данных."
+
+      # ============================================================
+      # TELEGRAM ALERTS
+      # ============================================================
+
+      - alert: TelegramSendFailures
+        expr: rate(ppe_alerter_telegram_failures_total[5m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Ошибки отправки в Telegram"
+          description: "Система не может отправить уведомления в Telegram."

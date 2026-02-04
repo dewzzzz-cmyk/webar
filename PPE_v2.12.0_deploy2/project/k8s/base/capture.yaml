@@ -1,0 +1,68 @@
+# Capture Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: capture
+  namespace: ppe-detection
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: capture
+  template:
+    metadata:
+      labels:
+        app: capture
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      containers:
+        - name: capture
+          image: ppe-capture:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 9100
+          env:
+            - name: REDIS_URL
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: REDIS_URL
+            - name: FRAME_RATE
+              valueFrom:
+                configMapKeyRef:
+                  name: ppe-config
+                  key: FRAME_RATE
+          volumeMounts:
+            - name: cameras-config
+              mountPath: /app/configs
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "200m"
+            limits:
+              memory: "1Gi"
+              cpu: "1000m"
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 9100
+            initialDelaySeconds: 30
+            periodSeconds: 10
+      volumes:
+        - name: cameras-config
+          configMap:
+            name: cameras-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: capture
+  namespace: ppe-detection
+spec:
+  selector:
+    app: capture
+  ports:
+    - port: 9100
+      targetPort: 9100

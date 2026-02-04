@@ -1,0 +1,216 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": true,
+  "panels": [
+    {
+      "gridPos": {"h": 2, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "options": {
+        "content": "# 📹 Cameras & Violations Dashboard\n\nМониторинг камер и статистика нарушений СИЗ",
+        "mode": "markdown"
+      },
+      "type": "text"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 2},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+      "targets": [{"expr": "count(ppe_camera_status == 1)", "refId": "A"}],
+      "title": "🟢 Cameras Online",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "red", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 2},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center"},
+      "targets": [{"expr": "count(ppe_camera_status == 0)", "refId": "A"}],
+      "title": "🔴 Cameras Offline",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 10}, {"color": "red", "value": 50}]}
+        }
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 2},
+      "id": 3,
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "targets": [{"expr": "sum(increase(ppe_violations_total[1h]))", "refId": "A"}],
+      "title": "⚠️ Violations (1h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "short",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 50}, {"color": "red", "value": 200}]}
+        }
+      },
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 2},
+      "id": 4,
+      "targets": [{"expr": "sum(increase(ppe_violations_total[24h]))", "refId": "A"}],
+      "title": "📊 Violations (24h)",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}},
+        "overrides": [
+          {"matcher": {"id": "byName", "options": "no_hardhat"}, "properties": [{"id": "color", "value": {"fixedColor": "#E02F44", "mode": "fixed"}}]},
+          {"matcher": {"id": "byName", "options": "no_vest"}, "properties": [{"id": "color", "value": {"fixedColor": "#FF9830", "mode": "fixed"}}]}
+        ]
+      },
+      "gridPos": {"h": 10, "w": 12, "x": 0, "y": 8},
+      "id": 10,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right"}},
+      "targets": [
+        {"expr": "sum(increase(ppe_violations_total[5m])) by (violation_type)", "legendFormat": "{{violation_type}}", "refId": "A"}
+      ],
+      "title": "Violations by Type",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short", "custom": {"drawStyle": "line", "fillOpacity": 10}},
+        "overrides": []
+      },
+      "gridPos": {"h": 10, "w": 12, "x": 12, "y": 8},
+      "id": 11,
+      "options": {"legend": {"calcs": ["sum"], "displayMode": "table", "placement": "right"}},
+      "targets": [
+        {"expr": "sum(increase(ppe_violations_total[5m])) by (camera_id)", "legendFormat": "{{camera_id}}", "refId": "A"}
+      ],
+      "title": "Violations by Camera",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "fps", "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "yellow", "value": 2}, {"color": "green", "value": 4}]}},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 18},
+      "id": 20,
+      "options": {
+        "displayMode": "lcd",
+        "minVizHeight": 10,
+        "minVizWidth": 0,
+        "orientation": "horizontal",
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "showUnfilled": true
+      },
+      "targets": [
+        {"expr": "ppe_camera_fps", "legendFormat": "{{camera_id}} - {{camera_name}}", "refId": "A"}
+      ],
+      "title": "Camera FPS",
+      "type": "bargauge"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 26},
+      "id": 30,
+      "targets": [
+        {"expr": "rate(ppe_camera_frames_total[5m])", "legendFormat": "{{camera_id}}", "refId": "A"}
+      ],
+      "title": "Frames Captured per Second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 26},
+      "id": 31,
+      "targets": [
+        {"expr": "rate(ppe_camera_errors_total[5m])", "legendFormat": "{{camera_id}}", "refId": "A"}
+      ],
+      "title": "Camera Errors per Second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "decbytes"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 34},
+      "id": 40,
+      "targets": [
+        {"expr": "redis_memory_used_bytes", "legendFormat": "Used", "refId": "A"}
+      ],
+      "title": "Redis Memory",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 34},
+      "id": 41,
+      "targets": [
+        {"expr": "pg_stat_activity_count", "legendFormat": "Connections", "refId": "A"}
+      ],
+      "title": "PostgreSQL Connections",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 34},
+      "id": 42,
+      "targets": [
+        {"expr": "pg_database_size_bytes{datname=\"ppe_detection\"}", "legendFormat": "DB Size", "refId": "A"}
+      ],
+      "title": "Database Size",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "5s",
+  "schemaVersion": 38,
+  "tags": ["ppe", "cameras", "violations"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "PPE Cameras & Violations",
+  "uid": "ppe-cameras-violations",
+  "version": 1
+}

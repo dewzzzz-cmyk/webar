@@ -1,0 +1,17 @@
+{
+  "description": "Маппинг классов модели на нарушения СИЗ",
+  "mode": "coco_person_only",
+  "note": "Базовая YOLOv8 детектирует только person. Для PPE нужно дообучение.",
+  
+  "coco_person_class": 0,
+  
+  "ppe_classes": {
+    "Hardhat": {"type": "ppe", "label": "Каска", "index": 0},
+    "NO-Hardhat": {"type": "violation", "label": "Без каски", "alert": "no_hardhat", "index": 2},
+    "Safety Vest": {"type": "ppe", "label": "Жилет", "index": 7},
+    "NO-Safety Vest": {"type": "violation", "label": "Без жилета", "alert": "no_vest", "index": 4},
+    "Person": {"type": "person", "label": "Человек", "index": 5}
+  },
+  
+  "violation_types": ["no_hardhat", "no_vest", "no_mask", "no_glasses", "no_gloves"]
+}

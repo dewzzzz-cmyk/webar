@@ -1,0 +1,232 @@
+{
+  "annotations": {
+    "list": []
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "gridPos": {"h": 2, "w": 24, "x": 0, "y": 0},
+      "id": 100,
+      "options": {
+        "content": "# 🦺 PPE Detection System - System Health\n\nМониторинг состояния системы контроля СИЗ",
+        "mode": "markdown"
+      },
+      "type": "text"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 0, "y": 2},
+      "id": 1,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center", "orientation": "auto", "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}, "textMode": "auto"},
+      "targets": [{"expr": "up{job=\"ppe-api\"}", "refId": "A"}],
+      "title": "API Service",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 4, "y": 2},
+      "id": 2,
+      "options": {"colorMode": "background", "graphMode": "none", "justifyMode": "center"},
+      "targets": [{"expr": "up{job=\"ppe-detector\"}", "refId": "A"}],
+      "title": "Detector Service",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 8, "y": 2},
+      "id": 3,
+      "targets": [{"expr": "up{job=\"redis\"}", "refId": "A"}],
+      "title": "Redis",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {"options": {"0": {"color": "red", "text": "DOWN"}}, "type": "value"},
+            {"options": {"1": {"color": "green", "text": "UP"}}, "type": "value"}
+          ],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 12, "y": 2},
+      "id": 4,
+      "targets": [{"expr": "up{job=\"postgres\"}", "refId": "A"}],
+      "title": "PostgreSQL",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 70}, {"color": "red", "value": 85}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 16, "y": 2},
+      "id": 5,
+      "options": {"colorMode": "value", "graphMode": "area"},
+      "targets": [{"expr": "100 - (avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100)", "refId": "A"}],
+      "title": "CPU Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {"mode": "absolute", "steps": [{"color": "green", "value": null}, {"color": "yellow", "value": 75}, {"color": "red", "value": 90}]}
+        }
+      },
+      "gridPos": {"h": 4, "w": 4, "x": 20, "y": 2},
+      "id": 6,
+      "targets": [{"expr": "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100", "refId": "A"}],
+      "title": "Memory Usage",
+      "type": "stat"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "id": 10,
+      "options": {"legend": {"calcs": [], "displayMode": "list", "placement": "bottom"}},
+      "targets": [
+        {"expr": "rate(http_requests_total{job=\"ppe-api\"}[5m])", "legendFormat": "{{method}} {{path}}", "refId": "A"}
+      ],
+      "title": "API Requests per Second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "s"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "id": 11,
+      "targets": [
+        {"expr": "histogram_quantile(0.50, rate(http_request_duration_seconds_bucket{job=\"ppe-api\"}[5m]))", "legendFormat": "p50", "refId": "A"},
+        {"expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job=\"ppe-api\"}[5m]))", "legendFormat": "p95", "refId": "B"},
+        {"expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job=\"ppe-api\"}[5m]))", "legendFormat": "p99", "refId": "C"}
+      ],
+      "title": "API Response Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 14},
+      "id": 20,
+      "targets": [
+        {"expr": "ppe_detector_queue_size", "legendFormat": "Queue Size", "refId": "A"}
+      ],
+      "title": "Detector Queue Size",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "s"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 14},
+      "id": 21,
+      "targets": [
+        {"expr": "ppe_detector_inference_time_seconds", "legendFormat": "Inference Time", "refId": "A"}
+      ],
+      "title": "Detector Inference Time",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 14},
+      "id": 22,
+      "targets": [
+        {"expr": "rate(ppe_detector_frames_processed_total[5m])", "legendFormat": "Frames/sec", "refId": "A"}
+      ],
+      "title": "Frames Processed per Second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+      "id": 30,
+      "targets": [
+        {"expr": "rate(ppe_violations_total[1h])", "legendFormat": "{{violation_type}}", "refId": "A"}
+      ],
+      "title": "Violations per Hour",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {
+        "defaults": {"unit": "short"},
+        "overrides": []
+      },
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+      "id": 31,
+      "targets": [
+        {"expr": "ppe_camera_fps", "legendFormat": "{{camera_id}}", "refId": "A"}
+      ],
+      "title": "Camera FPS",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "10s",
+  "schemaVersion": 38,
+  "tags": ["ppe", "monitoring"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "PPE System Health",
+  "uid": "ppe-system-health",
+  "version": 1
+}
