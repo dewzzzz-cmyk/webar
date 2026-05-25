@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>AI Издательство — Pipeline</title>
+<style>
+  :root{
+    --bg:#0a0b12; --panel:#12141f; --panel2:#171a28; --line:#262a3d;
+    --txt:#e6e8f2; --dim:#8b90a8; --accent:#6c5cff; --accent2:#19d3c5;
+    --gold:#ffcf5c; --ok:#3ddc84; --work:#ffb547; --idle:#4a4f6a;
+    --glow:0 0 24px rgba(108,92,255,.45);
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:radial-gradient(1200px 700px at 70% -10%,#1a1d33 0,var(--bg) 60%);color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;overflow:hidden}
+  .app{display:flex;flex-direction:column;height:100vh}
+
+  /* top bar */
+  header{display:flex;align-items:center;gap:18px;padding:12px 20px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(23,26,40,.9),rgba(18,20,31,.6));backdrop-filter:blur(8px)}
+  .logo{font-weight:800;letter-spacing:.5px;font-size:18px;display:flex;align-items:center;gap:10px}
+  .logo .dot{width:10px;height:10px;border-radius:50%;background:var(--accent);box-shadow:var(--glow);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.5);opacity:.5}}
+  .metrics{display:flex;gap:14px;margin-left:auto;flex-wrap:wrap}
+  .metric{background:var(--panel2);border:1px solid var(--line);border-radius:12px;padding:7px 14px;min-width:96px}
+  .metric .k{font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:.6px}
+  .metric .v{font-size:18px;font-weight:700;font-variant-numeric:tabular-nums}
+  .metric .v.up{animation:flash .5s}
+  @keyframes flash{0%{color:var(--gold);text-shadow:0 0 12px var(--gold)}100%{color:var(--txt)}}
+
+  /* main */
+  main{flex:1;position:relative;overflow:hidden}
+  svg.links{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
+  .graph{position:absolute;inset:0}
+  .node{position:absolute;width:184px;background:linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);border-radius:16px;padding:12px;transition:box-shadow .3s,border-color .3s,transform .25s;
+    transform:translate(-50%,-50%)}
+  .node.working{border-color:var(--work);box-shadow:0 0 0 1px var(--work),0 0 30px rgba(255,181,71,.25)}
+  .node.done{border-color:var(--ok)}
+  .node:hover{transform:translate(-50%,-50%) translateY(-4px);box-shadow:var(--glow)}
+  .node .head{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+  .node .ico{font-size:18px}
+  .node .name{font-weight:700;font-size:13px}
+  .node .stat{margin-left:auto;width:9px;height:9px;border-radius:50%;background:var(--idle);transition:.3s}
+  .node.working .stat{background:var(--work);box-shadow:0 0 10px var(--work);animation:pulse 1s infinite}
+  .node.done .stat{background:var(--ok);box-shadow:0 0 10px var(--ok)}
+  .node .role{font-size:10.5px;color:var(--dim);margin-bottom:8px}
+  .bar{height:5px;background:#0c0e18;border-radius:4px;overflow:hidden}
+  .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .12s linear}
+  .node .out{margin-top:8px;font-size:10.5px;color:#aeb3cc;min-height:26px;line-height:1.35;
+    border-top:1px dashed var(--line);padding-top:6px;font-style:italic}
+  .node .badge{position:absolute;top:-9px;right:10px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;
+    padding:2px 7px;border-radius:8px;opacity:0;transform:translateY(4px);transition:.3s}
+  .node.lvlup .badge{opacity:1;transform:translateY(0)}
+
+  /* flowing particle */
+  .pulse{fill:var(--accent2);filter:drop-shadow(0 0 6px var(--accent2))}
+
+  /* controls + log */
+  footer{border-top:1px solid var(--line);background:rgba(18,20,31,.85);backdrop-filter:blur(8px);
+    display:flex;gap:14px;padding:12px 20px;align-items:stretch;height:170px}
+  .controls{display:flex;flex-direction:column;gap:10px;min-width:230px}
+  .btn{border:none;border-radius:12px;padding:12px 16px;font-weight:700;font-size:14px;cursor:pointer;color:#fff;
+    background:linear-gradient(135deg,var(--accent),#8b6cff);box-shadow:var(--glow);transition:.2s}
+  .btn:hover{transform:translateY(-1px)}
+  .btn.ghost{background:var(--panel2);border:1px solid var(--line);box-shadow:none;color:var(--txt)}
+  .btn.on{background:linear-gradient(135deg,var(--ok),#2ec27e)}
+  .row{display:flex;gap:8px;align-items:center;font-size:12px;color:var(--dim)}
+  .row input[type=range]{flex:1;accent-color:var(--accent)}
+  .console{flex:1;background:#070811;border:1px solid var(--line);border-radius:12px;padding:10px 12px;
+    overflow-y:auto;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;line-height:1.55}
+  .console .ln{margin-bottom:3px}
+  .console .tag{color:var(--accent2);font-weight:700}
+  .console .sys{color:var(--gold)}
+  .console .dim{color:var(--dim)}
+  .console::-webkit-scrollbar{width:8px}
+  .console::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="logo"><span class="dot"></span> AI Издательство</div>
+    <div class="metrics" id="metrics">
+      <div class="metric"><div class="k">Книги</div><div class="v" id="m-books">0</div></div>
+      <div class="metric"><div class="k">Слова</div><div class="v" id="m-words">0</div></div>
+      <div class="metric"><div class="k">Выручка ₽</div><div class="v" id="m-rev">0</div></div>
+      <div class="metric"><div class="k">Репутация</div><div class="v" id="m-rep">0</div></div>
+      <div class="metric"><div class="k">Токены</div><div class="v" id="m-tok">0</div></div>
+    </div>
+  </header>
+
+  <main id="stage">
+    <svg class="links" id="links"></svg>
+    <div class="graph" id="graph"></div>
+  </main>
+
+  <footer>
+    <div class="controls">
+      <button class="btn" id="run">▶ Запустить конвейер</button>
+      <button class="btn ghost" id="auto">∞ Авто-цикл: выкл</button>
+      <div class="row"><span>Скорость</span><input type="range" id="speed" min="1" max="10" value="5"></div>
+      <div class="row dim" id="hint">Один прогон проводит «рукопись» через все агенты.</div>
+    </div>
+    <div class="console" id="console"></div>
+  </footer>
+</div>
+
+<script>
+/* ============================================================
+   PIPELINE DEFINITION — узлы-агенты конвейера
+   ============================================================ */
+const STAGES = [
+  { id:'idea',  name:'Идея',        ico:'💡', role:'Генератор концепций',  x:0.07, y:0.30 },
+  { id:'plot',  name:'Сюжет',       ico:'🧭', role:'Архитектор сюжета',    x:0.22, y:0.62 },
+  { id:'chap',  name:'Главы',       ico:'✍️', role:'Писатель',             x:0.38, y:0.28 },
+  { id:'edit',  name:'Редактура',   ico:'🔍', role:'Редактор-критик',      x:0.54, y:0.62 },
+  { id:'art',   name:'Иллюстрации', ico:'🎨', role:'Художник',             x:0.70, y:0.28 },
+  { id:'cover', name:'Обложка',     ico:'📕', role:'Дизайнер обложек',     x:0.84, y:0.60 },
+  { id:'pub',   name:'Публикация',  ico:'🚀', role:'Издатель',             x:0.95, y:0.32 },
+];
+
+/* Мок-фрагменты вывода для имитации стриминга по стадиям.
+   Здесь же — точка подмены на реальный DeepSeek API (см. callLLM). */
+const MOCK = {
+  idea:['Роман о городе, который снится сам себе','Притча про сборщика забытых имён','Детектив, где улики — это сны','Хроника последнего библиотекаря Марса','Сказка о фабрике несбывшихся писем'],
+  plot:['Завязка → потеря → запретное знание → цена','Три арки: побег, союз, жертва','Кольцевая структура, финал = начало','Параллельные линии сходятся в главе 9'],
+  chap:['«Дождь шёл вверх, и никто не удивлялся…»','«Она открыла дверь, которой не было вчера.»','«Город дышал в ритме его шагов.»','«Письмо пахло морем и чужим почерком.»'],
+  edit:['Срезал 12% воды, усилил ритм','Диалоги — живее, ремарки — короче','Поправил арку героя в 3 акте','Темп ровный, метафоры не спорят'],
+  art:['Палитра: индиго + латунь, мягкий туман','3 разворота: порт, башня, рассвет','Стиль — гравюра с неоновым акцентом'],
+  cover:['Минимализм: силуэт на градиенте','Типографика крупная, контур золотом','Тёмный фон, одиночный световой объект'],
+  pub:['Загружено в каталог · ISBN присвоен','Анонс разослан · 3 площадки','Тираж в продаже'],
+};
+
+/* ============================================================
+   LLM ADAPTER — пока мок. DeepSeek подключается здесь.
+   DeepSeek OpenAI-совместим: POST https://api.deepseek.com/chat/completions
+   ВАЖНО: ключ нельзя держать в браузере — реальные вызовы пойдут
+   через бэкенд-прокси. Сейчас USE_REAL_API=false → стриминг имитируется.
+   ============================================================ */
+const USE_REAL_API = false;
+async function* callLLM(stageId){
+  if(USE_REAL_API){
+    /* будущая реализация: fetch к /api/generate (прокси к DeepSeek),
+       чтение ReadableStream и yield чанков текста */
+    return;
+  }
+  const pool = MOCK[stageId];
+  const text = pool[Math.floor(Math.random()*pool.length)];
+  const words = text.split(/(\s+)/);
+  for(const w of words){ yield w; await wait(34); }
+}
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const state = { books:0, words:0, rev:0, rep:0, tok:0, running:false, auto:false, level:{} };
+STAGES.forEach(s=>state.level[s.id]=1);
+
+const $=id=>document.getElementById(id);
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const fmt=n=>n.toLocaleString('ru-RU');
+const speed=()=> 11 - Number($('speed').value); // 1..10 -> делитель
+
+/* ============================================================
+   RENDER GRAPH
+   ============================================================ */
+const graph=$('graph'), svg=$('links'), stage=$('stage');
+const nodes={};
+function layout(){
+  const r=stage.getBoundingClientRect();
+  STAGES.forEach(s=>{
+    const el=nodes[s.id];
+    el.style.left=(s.x*r.width)+'px';
+    el.style.top =(s.y*r.height)+'px';
+  });
+  drawLinks();
+}
+function buildNodes(){
+  STAGES.forEach(s=>{
+    const el=document.createElement('div');
+    el.className='node'; el.id='n-'+s.id;
+    el.innerHTML=`<div class="badge">LVL UP</div>
+      <div class="head"><span class="ico">${s.ico}</span><span class="name">${s.name}</span><span class="stat"></span></div>
+      <div class="role">${s.role} · ур.<b id="lv-${s.id}">1</b></div>
+      <div class="bar"><i id="bar-${s.id}"></i></div>
+      <div class="out" id="out-${s.id}">ожидание…</div>`;
+    graph.appendChild(el);
+    nodes[s.id]=el;
+  });
+}
+function center(id){
+  const r=stage.getBoundingClientRect(), n=nodes[id].getBoundingClientRect();
+  return { x:n.left-r.left+n.width/2, y:n.top-r.top+n.height/2 };
+}
+function drawLinks(){
+  svg.innerHTML='';
+  for(let i=0;i<STAGES.length-1;i++){
+    const a=center(STAGES[i].id), b=center(STAGES[i+1].id);
+    const mx=(a.x+b.x)/2;
+    const d=`M ${a.x} ${a.y} C ${mx} ${a.y}, ${mx} ${b.y}, ${b.x} ${b.y}`;
+    const p=document.createElementNS('http://www.w3.org/2000/svg','path');
+    p.setAttribute('d',d); p.setAttribute('fill','none');
+    p.setAttribute('stroke','#2a2f47'); p.setAttribute('stroke-width','2');
+    p.id='link-'+i; svg.appendChild(p);
+  }
+}
+
+/* частица, бегущая по связи i */
+async function flow(i){
+  const path=$('link-'+i); if(!path) return;
+  const len=path.getTotalLength();
+  const dot=document.createElementNS('http://www.w3.org/2000/svg','circle');
+  dot.setAttribute('r','4'); dot.setAttribute('class','pulse'); svg.appendChild(dot);
+  path.setAttribute('stroke','#3a4170');
+  const dur=420; const t0=performance.now();
+  return new Promise(res=>{
+    function step(t){
+      const k=Math.min(1,(t-t0)/dur);
+      const pt=path.getPointAtLength(k*len);
+      dot.setAttribute('cx',pt.x); dot.setAttribute('cy',pt.y);
+      if(k<1){requestAnimationFrame(step);}
+      else{dot.remove(); path.setAttribute('stroke','#2a2f47'); res();}
+    }
+    requestAnimationFrame(step);
+  });
+}
+
+/* ============================================================
+   METRICS
+   ============================================================ */
+function bump(id,val,suffix=''){
+  const el=$(id); el.textContent=fmt(val)+suffix;
+  el.classList.remove('up'); void el.offsetWidth; el.classList.add('up');
+}
+function setMetrics(){
+  $('m-books').textContent=fmt(state.books);
+  $('m-words').textContent=fmt(state.words);
+  $('m-rev').textContent=fmt(state.rev);
+  $('m-rep').textContent=fmt(state.rep);
+  $('m-tok').textContent=fmt(state.tok);
+}
+
+/* ============================================================
+   CONSOLE
+   ============================================================ */
+const con=$('console');
+function log(html,cls=''){
+  const d=document.createElement('div'); d.className='ln '+cls; d.innerHTML=html;
+  con.appendChild(d); con.scrollTop=con.scrollHeight;
+  while(con.children.length>120) con.removeChild(con.firstChild);
+}
+
+/* ============================================================
+   PIPELINE RUN
+   ============================================================ */
+async function runStage(s,i){
+  const el=nodes[s.id], bar=$('bar-'+s.id), out=$('out-'+s.id);
+  el.classList.remove('done'); el.classList.add('working');
+  out.textContent=''; bar.style.width='0';
+  log(`<span class="tag">[${s.name}]</span> <span class="dim">${s.role} начал работу…</span>`);
+
+  let buf='', steps=0;
+  for await (const chunk of callLLM(s.id)){
+    buf+=chunk; out.textContent=buf;
+    steps++; bar.style.width=Math.min(100,steps*9)+'%';
+    state.tok+=chunk.trim()?1:0; $('m-tok').textContent=fmt(state.tok);
+    if(s.id==='chap'||s.id==='edit'){ state.words+=chunk.trim().length?2:0; }
+  }
+  bar.style.width='100%';
+  state.words+=buf.replace(/\s+/g,' ').trim().split(' ').length;
+  bump('m-words',state.words);
+  el.classList.remove('working'); el.classList.add('done');
+  log(`<span class="tag">[${s.name}]</span> → «${buf}»`);
+  await wait(120*speed());
+}
+
+async function runPipeline(){
+  if(state.running) return;
+  state.running=true; $('run').textContent='⏳ Конвейер работает…';
+  log('<span class="sys">▶ Новая рукопись запущена в производство</span>');
+  STAGES.forEach(s=>{nodes[s.id].classList.remove('done');});
+
+  for(let i=0;i<STAGES.length;i++){
+    await runStage(STAGES[i],i);
+    if(i<STAGES.length-1) await flow(i);
+  }
+
+  // книга готова
+  state.books++; bump('m-books',state.books);
+  const price=900+Math.floor(Math.random()*1400);
+  state.rev+=price; bump('m-rev',state.rev);
+  state.rep+=Math.ceil(Math.random()*5); bump('m-rep',state.rep);
+  log(`<span class="sys">✓ Книга #${state.books} издана · +${price}₽ · +репутация</span>`);
+
+  checkUnlocks();
+
+  state.running=false; $('run').textContent='▶ Запустить конвейер';
+  if(state.auto){ await wait(300*speed()); runPipeline(); }
+}
+
+/* Paperclip-вайб: пороги разблокировок прокачивают агентов */
+function checkUnlocks(){
+  const tiers=[{b:3,id:'chap'},{b:5,id:'edit'},{b:8,id:'art'},{b:12,id:'idea'},{b:16,id:'cover'}];
+  tiers.forEach(t=>{
+    if(state.books===t.b){
+      state.level[t.id]++; $('lv-'+t.id).textContent=state.level[t.id];
+      const el=nodes[t.id]; el.classList.add('lvlup');
+      setTimeout(()=>el.classList.remove('lvlup'),2200);
+      const s=STAGES.find(x=>x.id===t.id);
+      log(`<span class="sys">⚡ Разблокировано: «${s.name}» повышен до уровня ${state.level[t.id]} — качество и скорость выросли</span>`);
+      $('hint').textContent=`Достигнут уровень ${state.level[t.id]} у агента «${s.name}». Следующие улучшения ждут впереди.`;
+    }
+  });
+}
+
+/* ============================================================
+   INIT
+   ============================================================ */
+buildNodes(); layout();
+window.addEventListener('resize',layout);
+setMetrics();
+log('<span class="dim">Система готова. Агенты в режиме ожидания. Нажмите «Запустить конвейер».</span>');
+
+$('run').onclick=()=>runPipeline();
+$('auto').onclick=function(){
+  state.auto=!state.auto;
+  this.classList.toggle('on',state.auto);
+  this.textContent=state.auto?'∞ Авто-цикл: вкл':'∞ Авто-цикл: выкл';
+  if(state.auto && !state.running) runPipeline();
+};
+</script>
+</body>
+</html>
