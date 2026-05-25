@@ -48,8 +48,10 @@
   .node .role{font-size:10.5px;color:var(--dim);margin-bottom:8px}
   .bar{height:5px;background:#0c0e18;border-radius:4px;overflow:hidden}
   .bar > i{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),var(--accent2));transition:width .12s linear}
-  .node .out{margin-top:8px;font-size:10.5px;color:#aeb3cc;min-height:26px;line-height:1.35;
-    border-top:1px dashed var(--line);padding-top:6px;font-style:italic}
+  .node .out{margin-top:8px;font-size:10.5px;color:#aeb3cc;min-height:26px;max-height:110px;overflow-y:auto;
+    line-height:1.35;border-top:1px dashed var(--line);padding-top:6px;font-style:italic}
+  .node .out::-webkit-scrollbar{width:6px}
+  .node .out::-webkit-scrollbar-thumb{background:var(--line);border-radius:6px}
   .node .badge{position:absolute;top:-9px;right:10px;background:var(--accent);color:#fff;font-size:9px;font-weight:700;
     padding:2px 7px;border-radius:8px;opacity:0;transform:translateY(4px);transition:.3s}
   .node.lvlup .badge{opacity:1;transform:translateY(0)}
@@ -101,7 +103,7 @@
       <button class="btn" id="run">▶ Запустить конвейер</button>
       <button class="btn ghost" id="auto">∞ Авто-цикл: выкл</button>
       <div class="row"><span>Скорость</span><input type="range" id="speed" min="1" max="10" value="5"></div>
-      <div class="row dim" id="hint">Один прогон проводит «рукопись» через все агенты.</div>
+      <div class="row dim" id="hint">Узел «Главы» пишет через DeepSeek, остальные — демо. Один прогон = одна рукопись.</div>
     </div>
     <div class="console" id="console"></div>
   </footer>
@@ -134,28 +136,47 @@ const MOCK = {
 };
 
 /* ============================================================
-   LLM ADAPTER — пока мок. DeepSeek подключается здесь.
-   DeepSeek OpenAI-совместим: POST https://api.deepseek.com/chat/completions
-   ВАЖНО: ключ нельзя держать в браузере — реальные вызовы пойдут
-   через бэкенд-прокси. Сейчас USE_REAL_API=false → стриминг имитируется.
+   LLM ADAPTER — реальная генерация через бэкенд-прокси (server.js → DeepSeek).
+   REAL_STAGES — узлы, которые пишут по-настоящему. Остальные — мок.
+   При сбое сети / отсутствии ключа узел мягко откатывается на мок.
    ============================================================ */
-const USE_REAL_API = false;
-async function* callLLM(stageId){
-  if(USE_REAL_API){
-    /* будущая реализация: fetch к /api/generate (прокси к DeepSeek),
-       чтение ReadableStream и yield чанков текста */
-    return;
-  }
+const REAL_STAGES = new Set(['chap']);
+
+async function* mockStream(stageId){
   const pool = MOCK[stageId];
   const text = pool[Math.floor(Math.random()*pool.length)];
-  const words = text.split(/(\s+)/);
-  for(const w of words){ yield w; await wait(34); }
+  for(const w of text.split(/(\s+)/)){ yield w; await wait(34); }
+}
+
+async function* callLLM(stageId, context){
+  if(REAL_STAGES.has(stageId)){
+    try{
+      const res = await fetch('/api/generate',{
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ stage:stageId, context })
+      });
+      if(!res.ok || !res.body) throw new Error('HTTP '+res.status);
+      const reader=res.body.getReader(), dec=new TextDecoder();
+      let any=false;
+      while(true){
+        const {value,done}=await reader.read();
+        if(done) break;
+        const txt=dec.decode(value,{stream:true});
+        if(txt){ any=true; yield txt; }
+      }
+      if(any) return;
+      throw new Error('пустой ответ');
+    }catch(e){
+      log(`<span class="sys">⚠ DeepSeek недоступен (${e.message}) — «Главы» в мок-режиме</span>`);
+    }
+  }
+  yield* mockStream(stageId);
 }
 
 /* ============================================================
    STATE
    ============================================================ */
-const state = { books:0, words:0, rev:0, rep:0, tok:0, running:false, auto:false, level:{} };
+const state = { books:0, words:0, rev:0, rep:0, tok:0, running:false, auto:false, level:{}, outputs:{} };
 STAGES.forEach(s=>state.level[s.id]=1);
 
 const $=id=>document.getElementById(id);
@@ -262,14 +283,15 @@ async function runStage(s,i){
   log(`<span class="tag">[${s.name}]</span> <span class="dim">${s.role} начал работу…</span>`);
 
   let buf='', steps=0;
-  for await (const chunk of callLLM(s.id)){
+  for await (const chunk of callLLM(s.id, state.outputs)){
     buf+=chunk; out.textContent=buf;
     steps++; bar.style.width=Math.min(100,steps*9)+'%';
-    state.tok+=chunk.trim()?1:0; $('m-tok').textContent=fmt(state.tok);
-    if(s.id==='chap'||s.id==='edit'){ state.words+=chunk.trim().length?2:0; }
+    const w=chunk.trim()?chunk.trim().split(/\s+/).length:0;
+    state.tok+=w; $('m-tok').textContent=fmt(state.tok);
   }
   bar.style.width='100%';
-  state.words+=buf.replace(/\s+/g,' ').trim().split(' ').length;
+  state.outputs[s.id]=buf;
+  state.words+=buf.replace(/\s+/g,' ').trim().split(' ').filter(Boolean).length;
   bump('m-words',state.words);
   el.classList.remove('working'); el.classList.add('done');
   log(`<span class="tag">[${s.name}]</span> → «${buf}»`);
@@ -280,6 +302,7 @@ async function runPipeline(){
   if(state.running) return;
   state.running=true; $('run').textContent='⏳ Конвейер работает…';
   log('<span class="sys">▶ Новая рукопись запущена в производство</span>');
+  state.outputs={};
   STAGES.forEach(s=>{nodes[s.id].classList.remove('done');});
 
   for(let i=0;i<STAGES.length;i++){
