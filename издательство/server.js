@@ -32,6 +32,7 @@ async function handleGenerate(req, res){
   let raw=''; req.on('data',c=>{ raw+=c; if(raw.length>5e5) req.destroy(); });
   req.on('end', async ()=>{
     let b={}; try{ b=JSON.parse(raw||'{}'); }catch{}
+    if(process.env.PROXY_TOKEN && (b.proxyToken||'')!==process.env.PROXY_TOKEN) return send(res, 401, 'UNAUTHORIZED: неверный токен прокси.');
     const apiKey = (b.apiKey||'').trim();
     const baseURL = (b.baseURL||'https://api.deepseek.com').replace(/\/+$/,'');
     const model = b.model || 'deepseek-chat';
