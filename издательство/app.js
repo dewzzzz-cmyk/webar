@@ -1,379 +1,347 @@
 'use strict';
 
-/* ============ ШТАТ: роли агентов ============ */
-const ROSTER = [
-  { id:'scout',  emoji:'🔎', name:'Скаут',                role:'Редактор-аквизитор',
-    brief:'Оцениваю идею под рынок: есть ли спрос, на кого рассчитана, чем зацепит. Честно говорю «зайдёт / не зайдёт» и почему.' },
-  { id:'dev',    emoji:'🧭', name:'Структурный редактор', role:'Developmental editor',
-    brief:'Работаю с сюжетом, арками героев и темпом. Нахожу провисания, логические дыры и слабые переходы.' },
-  { id:'writer', emoji:'✍️', name:'Райтер',               role:'Автор / гострайтер',
-    brief:'Пишу и дописываю по брифу, держу единый голос и стиль книги от первой до последней строки.' },
-  { id:'line',   emoji:'🔧', name:'Литред',               role:'Литературный редактор',
-    brief:'Чищу фразы, убираю воду, усиливаю авторский голос, выравниваю ритм текста.' },
-  { id:'proof',  emoji:'🔍', name:'Корректор',            role:'Proofreader',
-    brief:'Опечатки, грамматика, пунктуация, единообразие оформления кавычек, тире и заголовков.' },
-  { id:'art',    emoji:'🎨', name:'Арт-директор',         role:'Дизайнер обложки',
-    brief:'Готовлю бриф и концепт обложки под жанр и аудиторию: настроение, композиция, палитра, типографика.' },
-  { id:'layout', emoji:'📐', name:'Верстальщик',          role:'Вёрстка / EPUB',
-    brief:'Собираю EPUB и PDF: типографика, оглавление, колонтитулы, чистый интерьер книги.' },
-  { id:'meta',   emoji:'🏷️', name:'Метаданные',           role:'Distribution',
-    brief:'Категории, ключевые слова, описание для карточки на площадках, рекомендованная цена.' },
-  { id:'mkt',    emoji:'📣', name:'Маркетолог',           role:'SMM / промо',
-    brief:'Аннотация, посты, рекламные тексты и план запуска под целевую аудиторию.' },
+/* ============ ДЕФОЛТНЫЕ АГЕНТЫ + ПРОМТЫ ============ */
+const TEMPLATES = [
+  { role:'scout',  name:'Скаут',        title:'Редактор-аквизитор', emoji:'🔎',
+    prompt:'Ты — литературный скаут и редактор-аквизитор. Оцени коммерческий и художественный потенциал книги под конкретный рынок и аудиторию. Дай чёткий вердикт (в производство / доработать / отклонить), главный крючок, целевую полку и риски. Без воды.' },
+  { role:'dev',    name:'Структурный редактор', title:'Developmental editor', emoji:'🧭',
+    prompt:'Ты — структурный (developmental) редактор. Проанализируй и улучши композицию: сюжет, арки персонажей, темп, логику. Дай конкретные правки списком и при необходимости перепиши проблемные места.' },
+  { role:'writer', name:'Райтер',       title:'Автор / гострайтер', emoji:'✍️',
+    prompt:'Ты — профессиональный писатель-прозаик. Пиши живой, образный текст строго по брифу и в заданном жанре, держи единый голос. Выдавай готовую прозу, а не план.' },
+  { role:'line',   name:'Литред',       title:'Литературный редактор', emoji:'🔧',
+    prompt:'Ты — литературный редактор. Улучшай текст на уровне фраз: убирай воду и штампы, усиливай ритм и образность, сохраняй авторский голос. Возвращай отредактированный текст.' },
+  { role:'proof',  name:'Корректор',    title:'Proofreader', emoji:'🔍',
+    prompt:'Ты — корректор. Исправляй орфографию, пунктуацию, грамматику и единообразие оформления. Возвращай вычитанный текст и краткий список ключевых правок.' },
+  { role:'art',    name:'Арт-директор', title:'Дизайнер обложки', emoji:'🎨',
+    prompt:'Ты — арт-директор. Составь подробный бриф обложки: концепция, композиция, палитра, типографика, настроение — под жанр и аудиторию. Дай 2–3 варианта.' },
+  { role:'layout', name:'Верстальщик',  title:'Вёрстка / EPUB', emoji:'📐',
+    prompt:'Ты — верстальщик. Опиши параметры вёрстки для EPUB и печати: форматы, шрифты, отступы, оглавление, колонтитулы.' },
+  { role:'meta',   name:'Метаданные',   title:'Distribution', emoji:'🏷️',
+    prompt:'Ты — специалист по метаданным и дистрибуции. Подготовь категории, ключевые слова, аннотацию для магазина (до 200 знаков) и рекомендованную цену в рублях.' },
+  { role:'mkt',    name:'Маркетолог',   title:'SMM / промо', emoji:'📣',
+    prompt:'Ты — книжный маркетолог. Составь план запуска и 3 готовых рекламных поста (тизер / цитата / релиз) под целевую аудиторию.' },
 ];
-const PIPELINES = {
-  write:['scout','dev','writer','line','proof','art','layout','meta','mkt'],
-  edit: ['scout','dev','line','proof','art','layout','meta','mkt'],
-};
-const agentById = id => ROSTER.find(a => a.id === id);
 
 /* ============ СОСТОЯНИЕ ============ */
-const KEY = 'izd_state_v1';
+const KEY='izd_studio_v2';
+const uid=()=>Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+
+function freshNode(t, x, y){
+  return { id:uid(), name:t.name, role:t.title, emoji:t.emoji, prompt:t.prompt,
+    x, y, useGlobal:true, baseURL:'', apiKey:'', model:'', temperature:1.0,
+    output:'', status:'idle', error:'' };
+}
 function defaultState(){
+  const nodes = TEMPLATES.map((t,i)=> freshNode(t, 60+(i%3)*250, 40+Math.floor(i/3)*180));
+  const edges = [];
+  for(let i=0;i<nodes.length-1;i++) edges.push({ id:uid(), from:nodes[i].id, to:nodes[i+1].id });
   return {
-    studio:'ИИ-Издательство',
-    policy:{ reader:'', loves:'', hates:'', tone:'', taboo:'' },
-    agents:Object.fromEntries(ROSTER.map(a => [a.id, { brief:a.brief, hired:true }])),
-    projects:[],
+    project:{ title:'', genre:'', audience:'', brief:'', mode:'write', input:'' },
+    global:{ baseURL:'https://api.deepseek.com', apiKey:'', model:'deepseek-chat', temperature:1.0 },
+    nodes, edges,
   };
 }
 let state = load();
-function load(){ try { return Object.assign(defaultState(), JSON.parse(localStorage.getItem(KEY))); } catch { return defaultState(); } }
+function load(){ try{ const s=JSON.parse(localStorage.getItem(KEY)); return s&&s.nodes? s : defaultState(); }catch{ return defaultState(); } }
 function save(){ localStorage.setItem(KEY, JSON.stringify(state)); }
 
-let view = 'projects';
-let openId = null;
-
-/* ============ УТИЛИТЫ ============ */
-const $ = s => document.querySelector(s);
-const main = $('#main');
-const esc = s => (s||'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
-const rnd = (a,b) => Math.floor(a + Math.random()*(b-a));
-const uid = () => Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-const STATE_LABEL = { locked:'в очереди', todo:'готов к работе', working:'работает…', review:'на вашем ревью', done:'принято' };
+const NW=212, PORT_Y=23;
+const node=id=>state.nodes.find(n=>n.id===id);
+const $=s=>document.querySelector(s);
+const esc=s=>(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const cfg=n=> n.useGlobal ? state.global : {
+  baseURL:n.baseURL||state.global.baseURL, apiKey:n.apiKey||state.global.apiKey,
+  model:n.model||state.global.model, temperature:typeof n.temperature==='number'?n.temperature:state.global.temperature };
+const hasKey=()=> state.nodes.some(n=>cfg(n).apiKey) || !!state.global.apiKey;
 
 /* ============ РЕНДЕР ============ */
+const nodesEl=$('#nodes'), edgesEl=$('#edges');
 function render(){
-  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view===view));
-  const inWork = state.projects.filter(p => !isComplete(p)).length;
-  const done = state.projects.filter(isComplete).length;
-  $('#kpi-books').textContent = inWork;
-  $('#kpi-done').textContent = done;
-  const reviews = state.projects.reduce((n,p)=> n + p.stages.filter(s=>s.status==='review').length, 0);
-  const badge = $('#nav-review');
-  badge.textContent = reviews; badge.classList.toggle('show', reviews>0);
-  $('#studio-name').textContent = state.studio;
-
-  if (view==='projects') main.innerHTML = openId ? workspaceHTML(byId(openId)) : projectsHTML();
-  else if (view==='staff') main.innerHTML = staffHTML();
-  else if (view==='policy') main.innerHTML = policyHTML();
+  $('#proj-title').value=state.project.title;
+  $('#proj-genre').value=state.project.genre;
+  $('#proj-aud').value=state.project.audience;
+  $('#proj-brief').value=state.project.brief;
+  $('#proj-mode').value=state.project.mode;
+  const ks=$('#api-state');
+  ks.textContent = hasKey() ? '● ключ задан' : '● ключ не задан';
+  ks.classList.toggle('ok', hasKey());
+  $('#input-btn').style.display = state.project.mode==='edit' ? '' : 'none';
+  $('#canvas-hint').textContent = 'Тяни блок за шапку • соединяй кружки (выход→вход) • клик по связи — удалить';
+  renderNodes(); renderEdges();
 }
-const byId = id => state.projects.find(p=>p.id===id);
-const stageDone = s => s.status==='done';
-const isComplete = p => p.stages.length>0 && p.stages.every(stageDone);
-const progress = p => p.stages.length ? Math.round(100 * p.stages.filter(stageDone).length / p.stages.length) : 0;
-
-/* ---- Проекты (список) ---- */
-function projectsHTML(){
-  const head = `<div class="page-head">
-    <div><h1>Проекты</h1><p>Книги в производстве. Вы — главный редактор: ставите задачи и принимаете работу.</p></div>
-    <div class="spacer"></div>
-    <button class="btn" data-action="new-project">＋ Новая книга</button>
-  </div>`;
-  if (!state.projects.length) return head + `<div class="empty"><div class="big">📚</div>
-    <h3>Пока ни одной книги</h3><p>Создайте первый проект — выберите режим и назначьте штат.</p></div>`;
-  const cards = state.projects.map(p=>{
-    const rev = p.stages.filter(s=>s.status==='review').length;
-    const cur = p.stages.find(s=>s.status!=='done');
-    const stageTxt = isComplete(p) ? 'Выпущена 🎉' : (cur ? `${agentById(cur.agentId).emoji} ${agentById(cur.agentId).name} · ${STATE_LABEL[cur.status]}` : '—');
-    return `<div class="card click proj" data-action="open-project" data-id="${p.id}">
-      <div class="proj-top">
-        <div class="proj-cover">${p.mode==='write'?'✒️':'📖'}</div>
-        <div><div class="proj-title">${esc(p.title)}</div>
-          <div class="proj-meta">${esc(p.genre||'без жанра')}</div></div>
+function renderNodes(){
+  nodesEl.innerHTML = state.nodes.map(n=>{
+    const out = n.error ? `⚠ ${esc(n.error)}` : (n.output ? esc(n.output) : 'нет результата');
+    return `<div class="node ${n.status}" data-node="${n.id}" style="left:${n.x}px;top:${n.y}px">
+      <div class="port in"  data-port="in"  data-id="${n.id}"></div>
+      <div class="port out" data-port="out" data-id="${n.id}"></div>
+      <div class="node-head" data-drag="${n.id}">
+        <div class="node-emoji">${n.emoji}</div>
+        <div><div class="node-name">${esc(n.name)}</div><div class="node-role">${esc(n.role)}</div></div>
+        <div class="node-status"></div>
       </div>
-      <span class="chip ${p.mode}">${p.mode==='write'?'пишем с нуля':'редактируем'}</span>
-      <div class="progress"><i style="width:${progress(p)}%"></i></div>
-      <div class="proj-foot"><span>${stageTxt}</span>
-        ${rev?`<span class="review-flag">● ${rev} на ревью</span>`:`<span>${progress(p)}%</span>`}</div>
+      <div class="node-body ${n.output||n.error?'':'empty'}" id="body-${n.id}">${out}</div>
+      <div class="node-foot">
+        <button class="btn ghost sm" data-action="open-node" data-id="${n.id}">⚙ Настроить</button>
+        <button class="btn ghost sm" data-action="run-node" data-id="${n.id}">▶ Прогнать</button>
+      </div>
     </div>`;
   }).join('');
-  return head + `<div class="grid cols">${cards}</div>`;
 }
-
-/* ---- Рабочая зона книги (конвейер) ---- */
-function workspaceHTML(p){
-  if (!p) { openId=null; return projectsHTML(); }
-  const stages = p.stages.map((s,idx)=>{
-    const a = agentById(s.agentId);
-    let btn = '';
-    if (s.status==='todo') btn = `<button class="btn sm" data-action="assign" data-id="${p.id}" data-idx="${idx}">▶ Поручить</button>`;
-    else if (s.status==='review') btn = `<button class="btn sm warn" data-action="open-review" data-id="${p.id}" data-idx="${idx}">👀 Проверить</button>`;
-    const cls = s.status==='done'?'done':s.status==='review'?'review':s.status==='working'?'working':'';
-    const stream = s.status==='working' ? `<div class="stage-stream" id="stream-${idx}"></div>` : '';
-    return `<div class="stage ${cls}" data-sidx="${idx}">
-      <div class="stage-row">
-        <div class="stage-emoji">${a.emoji}</div>
-        <div class="stage-info"><div class="stage-role">${a.name}</div><div class="stage-sub">${a.role}</div></div>
-        <span class="stage-state s-${s.status}">${STATE_LABEL[s.status]}</span>
-        ${btn}
-      </div>${stream}
-    </div>`;
+function portPos(id, side){ const n=node(id); return { x:n.x+(side==='out'?NW:0), y:n.y+PORT_Y+7 }; }
+function edgePath(a,b){ const dx=Math.max(40,Math.abs(b.x-a.x)*0.5); return `M ${a.x} ${a.y} C ${a.x+dx} ${a.y}, ${b.x-dx} ${b.y}, ${b.x} ${b.y}`; }
+function renderEdges(){
+  edgesEl.innerHTML = state.edges.map(e=>{
+    if(!node(e.from)||!node(e.to)) return '';
+    const d=edgePath(portPos(e.from,'out'), portPos(e.to,'in'));
+    const flow = node(e.from).status==='running' || node(e.to).status==='running';
+    return `<path class="edge ${flow?'flow':''}" d="${d}"></path>
+            <path class="edge hit" d="${d}" data-edge="${e.id}"></path>`;
   }).join('');
-  const complete = isComplete(p);
-  const busy = p.stages.some(s=>s.status==='working');
-  return `<button class="back" data-action="back">← Все проекты</button>
-    <div class="page-head" style="margin-top:10px">
-      <div><h1>${esc(p.title)}</h1>
-        <p>${p.mode==='write'?'Пишем с нуля':'Редактируем рукопись'} · ${esc(p.genre||'без жанра')} · аудитория: ${esc(p.audience||'не задана')}</p></div>
-      <div class="spacer"></div>
-      <span class="tok">~${p.tokens||0} токенов</span>
-      ${(!complete && !busy)?`<button class="btn ghost" data-action="autorun" data-id="${p.id}">▶▶ Авто-прогон</button>`:''}
-      ${complete?`<button class="btn ok" data-action="export" data-id="${p.id}">⬇ Экспорт книги</button>`:''}
-    </div>
-    ${p.brief?`<div class="deliverable"><div class="label">Бриф проекта</div>${esc(p.brief)}</div>`:''}
-    <div class="pipeline">${stages}</div>`;
 }
 
-/* ---- Штат ---- */
-function staffHTML(){
-  const head = `<div class="page-head"><div><h1>Штат</h1>
-    <p>Ваши ИИ-сотрудники. Инструктаж = редакционные стандарты, через которые работает каждый.</p></div></div>`;
-  const cards = ROSTER.map(a=>{
-    const st = state.agents[a.id];
-    const busy = state.projects.some(p => !isComplete(p) && p.stages.some(s=>s.agentId===a.id && (s.status==='working'||s.status==='review'||s.status==='todo')));
-    const pill = !st.hired ? `<span class="status-pill status-off">не в штате</span>`
-      : busy ? `<span class="status-pill status-busy">занят</span>` : `<span class="status-pill status-free">свободен</span>`;
-    return `<div class="card agent-card ${st.hired?'':'off'}">
-      <div class="agent-top"><div class="agent-emoji">${a.emoji}</div>
-        <div><div class="agent-name">${a.name}</div><div class="agent-role">${a.role}</div></div></div>
-      <div class="agent-brief">${esc(st.brief)}</div>
-      <div class="agent-foot">${pill}<div class="spacer" style="flex:1"></div>
-        <button class="btn sm ghost" data-action="edit-brief" data-id="${a.id}">✎ Инструктаж</button>
-        <button class="btn sm ${st.hired?'danger':'ok'}" data-action="toggle-hire" data-id="${a.id}">${st.hired?'Уволить':'Нанять'}</button>
-      </div></div>`;
-  }).join('');
-  return head + `<div class="grid cols">${cards}</div>`;
+/* ============ ПЕРЕТАСКИВАНИЕ УЗЛОВ ============ */
+const canvas=$('#canvas');
+let drag=null;
+nodesEl.addEventListener('mousedown', e=>{
+  const h=e.target.closest('[data-drag]'); if(!h) return;
+  const n=node(h.dataset.drag); const r=canvas.getBoundingClientRect();
+  drag={ id:n.id, dx:e.clientX - r.left + canvas.scrollLeft - n.x, dy:e.clientY - r.top + canvas.scrollTop - n.y };
+  e.preventDefault();
+});
+
+/* ============ ПРОВОДА (связи) ============ */
+let wire=null;
+nodesEl.addEventListener('mousedown', e=>{
+  const p=e.target.closest('.port.out'); if(!p) return;
+  wire={ from:p.dataset.id }; e.stopPropagation(); e.preventDefault();
+});
+function canvasPoint(e){ const r=canvas.getBoundingClientRect(); return { x:e.clientX-r.left+canvas.scrollLeft, y:e.clientY-r.top+canvas.scrollTop }; }
+
+window.addEventListener('mousemove', e=>{
+  if(drag){
+    const n=node(drag.id); const pt=canvasPoint(e);
+    n.x=Math.max(0, pt.x-drag.dx); n.y=Math.max(0, pt.y-drag.dy);
+    const el=nodesEl.querySelector(`[data-node="${n.id}"]`); if(el){ el.style.left=n.x+'px'; el.style.top=n.y+'px'; }
+    renderEdges();
+  } else if(wire){
+    const a=portPos(wire.from,'out'), b=canvasPoint(e);
+    let temp=edgesEl.querySelector('.edge-temp');
+    if(!temp){ temp=document.createElementNS('http://www.w3.org/2000/svg','path'); temp.setAttribute('class','edge-temp'); edgesEl.appendChild(temp); }
+    temp.setAttribute('d', edgePath(a,b));
+  }
+});
+window.addEventListener('mouseup', e=>{
+  if(drag){ drag=null; save(); }
+  if(wire){
+    const tgt=document.elementFromPoint(e.clientX,e.clientY);
+    const ip=tgt && tgt.closest && tgt.closest('.port.in');
+    if(ip){ const to=ip.dataset.id; addEdge(wire.from, to); }
+    wire=null; const t=edgesEl.querySelector('.edge-temp'); if(t) t.remove(); renderEdges();
+  }
+});
+function addEdge(from, to){
+  if(from===to) return toast('Нельзя соединить агента с собой','err');
+  if(state.edges.some(x=>x.from===from&&x.to===to)) return;
+  if(wouldCycle(from,to)) return toast('Связь создаёт петлю — отклонено','err');
+  state.edges.push({ id:uid(), from, to }); save(); renderEdges();
+}
+function wouldCycle(from,to){ // добавление from→to создаст цикл, если to уже достигает from
+  const seen=new Set(); const stack=[to];
+  while(stack.length){ const c=stack.pop(); if(c===from) return true; if(seen.has(c)) continue; seen.add(c);
+    state.edges.filter(e=>e.from===c).forEach(e=>stack.push(e.to)); }
+  return false;
 }
 
-/* ---- Редполитика ---- */
-function policyHTML(){
-  const p = state.policy;
-  return `<div class="page-head"><div><h1>Редполитика</h1>
-    <p>Ваше преимущество: понимание читателя. Эти установки получает каждый агент в каждой задаче.</p></div></div>
-    <div class="card" style="max-width:640px">
-      <div class="field"><label>Портрет читателя</label>
-        <textarea id="pol-reader" rows="3" placeholder="Кто ваш читатель: возраст, что ищет в книге, на каких авторах вырос…">${esc(p.reader)}</textarea></div>
-      <div class="field"><label>Что аудитория любит</label>
-        <textarea id="pol-loves" rows="2" placeholder="Динамика, живые диалоги, неожиданные финалы…">${esc(p.loves)}</textarea></div>
-      <div class="field"><label>Что отталкивает</label>
-        <textarea id="pol-hates" rows="2" placeholder="Затянутые описания, морализаторство, клише…">${esc(p.hates)}</textarea></div>
-      <div class="field"><label>Тон голоса издательства</label>
-        <input id="pol-tone" value="${esc(p.tone)}" placeholder="Например: умный, тёплый, без снобизма"></div>
-      <div class="field"><label>Табу</label>
-        <input id="pol-taboo" value="${esc(p.taboo)}" placeholder="Темы и приёмы, которых не допускаем"></div>
-      <button class="btn" data-action="save-policy">Сохранить политику</button>
-    </div>`;
+/* ============ КЛИК ПО ХОЛСТУ (удаление связи, действия) ============ */
+edgesEl.addEventListener('click', e=>{
+  const p=e.target.closest('[data-edge]'); if(!p) return;
+  state.edges=state.edges.filter(x=>x.id!==p.dataset.edge); save(); renderEdges(); toast('Связь удалена');
+});
+
+/* ============ ГЕНЕРАЦИЯ ============ */
+function buildMessages(n){
+  const pr=state.project;
+  const preds=state.edges.filter(e=>e.to===n.id).map(e=>node(e.from)).filter(Boolean);
+  const priorTxt=preds.filter(p=>p.output).map(p=>`— ${p.name} (${p.role}):\n${p.output}`).join('\n\n');
+  let user=`Книга: «${pr.title||'без названия'}»\nЖанр: ${pr.genre||'не задан'}\nАудитория: ${pr.audience||'не задана'}\n`+
+    `Режим: ${pr.mode==='write'?'пишем с нуля':'редактируем готовый текст'}\n`+
+    (pr.brief?`Бриф: ${pr.brief}\n`:'');
+  if(pr.mode==='edit' && pr.input && preds.length===0) user+=`\nИсходный текст:\n${pr.input}\n`;
+  if(priorTxt) user+=`\nМатериалы от предыдущих агентов:\n${priorTxt}\n`;
+  user+=`\nВыполни свою роль и выдай конкретный результат.`;
+  return [ { role:'system', content:n.prompt }, { role:'user', content:user } ];
 }
 
-/* ============ ЗАГЛУШКИ РЕЗУЛЬТАТОВ АГЕНТОВ ============ */
-function deliverable(agentId, p, attempt){
-  const pol = state.policy.reader ? ' (с учётом редполитики)' : '';
-  const g = p.genre || 'жанр не задан', aud = p.audience || 'широкая аудитория';
-  const v = {
-    scout:[`Оценка рынка${pol}: «${p.title}» в нише «${g}». Целевой читатель — ${aud}.\nВердикт: перспективно. Главный крючок — нестандартный конфликт. Риск — перенасыщенная ниша, нужен сильный хук в первой главе.\nРекомендация: в производство.`],
-    dev:[`Структурный разбор:\n• Завязка цепляет, но 2-я треть провисает — добавить точку невозврата к гл. ${rnd(7,12)}.\n• Арка героя читается, мотивация антагониста слабовата.\n• Темп: ускорить переходы между сценами, срезать 1 побочную линию.`],
-    writer:[`Черновик главы 1 (фрагмент)${pol}:\n«Город просыпался не сразу — сначала открывали глаза витрины, потом фонари, и только затем люди. ${p.title ? 'Она' : 'Он'} шёл против этого пробуждения, как против течения…»\nОбъём: ~${rnd(2,5)} тыс. слов.`],
-    line:[`Литредактура: вычищено ~${rnd(8,18)}% воды, усилены диалоги, выровнен ритм.\nПример: было «он быстро и стремительно побежал» → стало «он рванул».\nГолос автора сохранён.`],
-    proof:[`Корректура: исправлено ${rnd(20,60)} опечаток, ${rnd(10,40)} пунктуационных, унифицированы кавычки «ёлочки» и тире. Список правок приложен.`],
-    art:[`Бриф обложки${pol}: жанр ${g}, настроение — напряжённое, но не мрачное.\nКонцепт: одиночная фигура на контрастном фоне. Палитра: индиго + тёплый акцент. Шрифт заголовка — гротеск крупным кеглем.`],
-    layout:[`Вёрстка готова: EPUB + PDF, ${rnd(180,420)} стр.\nОсновной кегль 11, интерлиньяж 1.4, оглавление и колонтитулы, висячая пунктуация. Файлы прошли валидатор.`],
-    meta:[`Метаданные:\n• Категории: ${g} / современная проза.\n• Ключевые слова: ${g}, новинка, для ${aud}.\n• Аннотация (180 зн.) готова.\n• Рекомендованная цена: ${rnd(299,699)} ₽.`],
-    mkt:[`План запуска${pol}: 3 поста (тизер → цитата → релиз), таргет на «${aud}».\nАнонс в день старта продаж, рассылка по базе, 2 рекламных текста приложены.`],
-  };
-  const arr = v[agentId] || ['Готово.'];
-  let out = arr[0];
-  if (attempt>0) out = `(переработано по правке)\n` + out;
-  return out;
-}
-
-/* ============ ДЕЙСТВИЯ ============ */
-function newProjectDrawer(){
-  openDrawer('Новая книга', `
-    <div class="field"><label>Название</label><input id="np-title" placeholder="Рабочее название книги"></div>
-    <div class="field"><label>Режим</label>
-      <div class="seg">
-        <label><input type="radio" name="np-mode" value="write" checked>
-          <div class="opt"><b>✒️ Писать с нуля</b><small>агенты создают книгу по брифу</small></div></label>
-        <label><input type="radio" name="np-mode" value="edit">
-          <div class="opt"><b>📖 Редактировать</b><small>довести готовую рукопись</small></div></label>
-      </div></div>
-    <div class="field"><label>Жанр</label><input id="np-genre" placeholder="Например: триллер, нон-фикшн, young adult"></div>
-    <div class="field"><label>Целевая аудитория</label><input id="np-aud" placeholder="Кому адресована книга"></div>
-    <div class="field"><label>Бриф / задача</label>
-      <textarea id="np-brief" rows="4" placeholder="Идея, ключевые требования, чего точно хотите и чего избегать"></textarea></div>
-    <button class="btn" id="np-create">Создать и сформировать штат</button>
-  `, body=>{
-    body.querySelector('#np-create').onclick = ()=>{
-      const title = body.querySelector('#np-title').value.trim();
-      if(!title){ body.querySelector('#np-title').focus(); return; }
-      const mode = body.querySelector('input[name=np-mode]:checked').value;
-      const hiredOrder = PIPELINES[mode].filter(id => state.agents[id].hired);
-      const stages = hiredOrder.map((agentId,i)=>({ agentId, status:i===0?'todo':'locked', deliverable:'', attempt:0, notes:[] }));
-      state.projects.unshift({
-        id:uid(), title, mode,
-        genre:body.querySelector('#np-genre').value.trim(),
-        audience:body.querySelector('#np-aud').value.trim(),
-        brief:body.querySelector('#np-brief').value.trim(),
-        stages, createdAt:Date.now(),
-      });
-      save(); closeDrawer(); openId = state.projects[0].id; render();
-    };
-  });
-}
-
-function payload(p, idx){
-  const s = p.stages[idx]; const a = agentById(s.agentId);
-  const prior = p.stages.slice(0, idx).filter(stageDone).map(x=>{
-    const xa = agentById(x.agentId); return { name:xa.name, role:xa.role, text:x.deliverable };
-  });
-  return { agentId:a.id, name:a.name, role:a.role, brief:state.agents[a.id].brief,
-    policy:state.policy, project:{title:p.title,genre:p.genre,audience:p.audience,brief:p.brief,mode:p.mode},
-    prior, notes:s.notes };
-}
-
-async function runAgent(pid, idx){
-  const p = byId(pid); const s = p.stages[idx];
-  s.status='working'; s.deliverable=''; save(); if(openId===pid) render();
+async function runNode(id){
+  const n=node(id); const c=cfg(n);
+  if(!c.apiKey){ n.status='error'; n.error='не задан API-ключ (Настройки агента или ⚙ глобальные)'; save(); renderNodes(); openSettings(); return false; }
+  n.status='running'; n.output=''; n.error=''; save(); renderNodes(); renderEdges();
   let acc='';
   try{
-    const res = await fetch('/api/generate', { method:'POST',
-      headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload(p, idx)) });
-    if(!res.ok || !res.body) throw new Error('HTTP '+res.status);
-    const reader = res.body.getReader(), dec = new TextDecoder();
-    while(true){
-      const { value, done } = await reader.read(); if(done) break;
-      acc += dec.decode(value, {stream:true});
-      const el = document.getElementById('stream-'+idx);
-      if(el){ el.textContent = acc; el.scrollTop = el.scrollHeight; }
+    const res=await fetch('/api/generate',{ method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ baseURL:c.baseURL, apiKey:c.apiKey, model:c.model, temperature:c.temperature, messages:buildMessages(n) }) });
+    if(!res.ok){ const t=await res.text(); throw new Error(t.slice(0,200)); }
+    const reader=res.body.getReader(), dec=new TextDecoder();
+    while(true){ const {value,done}=await reader.read(); if(done) break;
+      acc+=dec.decode(value,{stream:true});
+      const b=document.getElementById('body-'+id); if(b){ b.classList.remove('empty'); b.textContent=acc; b.scrollTop=b.scrollHeight; }
     }
-    if(!acc.trim()) throw new Error('пустой ответ');
-  }catch(e){
-    acc = deliverable(s.agentId, p, s.attempt); // фолбэк-заглушка (нет ключа/сети)
-  }
-  s.deliverable = acc;
-  p.tokens = (p.tokens||0) + Math.max(1, Math.round(acc.length/5));
-  s.status='review'; save(); if(openId===pid) render();
-}
-const assign = (pid, idx) => runAgent(pid, idx);
-
-async function autoRun(pid){
-  const p = byId(pid);
-  for(let i=0;i<p.stages.length;i++){
-    if(p.stages[i].status==='done') continue;
-    if(p.stages[i].status==='locked') p.stages[i].status='todo';
-    await runAgent(pid, i);
-    approve(pid, i);
-    await new Promise(r=>setTimeout(r, 250));
+    if(!acc.trim()) throw new Error('пустой ответ от модели');
+    n.output=acc; n.status='done'; n.error=''; save(); renderNodes(); renderEdges(); return true;
+  }catch(err){
+    n.status='error'; n.error=String(err.message||err); n.output=acc; save(); renderNodes(); renderEdges();
+    toast('Ошибка агента «'+n.name+'»: '+n.error,'err'); return false;
   }
 }
 
-function reviewDrawer(pid, idx){
-  const p = byId(pid); const s = p.stages[idx]; const a = agentById(s.agentId);
-  const notes = s.notes.length ? `<div class="notes"><div class="section-label">Ваши правки</div>${
-    s.notes.map(n=>`<div class="note">${esc(n)}</div>`).join('')}</div>` : '';
-  openDrawer(`${a.emoji} ${a.name}`, `
-    <div class="deliverable"><div class="label">${a.role} · результат</div>${esc(s.deliverable)}</div>
-    ${notes}
-    <div class="field"><label>Вернуть с правкой (необязательно)</label>
-      <textarea id="rv-note" rows="3" placeholder="Что переделать: «усилить финал», «убрать канцелярит»…"></textarea></div>
-    <div class="review-actions">
-      <button class="btn ok" id="rv-approve">✅ Принять</button>
-      <button class="btn warn" id="rv-return">↩ Вернуть с правкой</button>
-      <button class="btn ghost" id="rv-redo">🔁 Переделать</button>
+function topoOrder(){
+  const indeg=new Map(state.nodes.map(n=>[n.id,0]));
+  state.edges.forEach(e=>indeg.set(e.to,(indeg.get(e.to)||0)+1));
+  const q=state.nodes.filter(n=>indeg.get(n.id)===0).map(n=>n.id); const order=[];
+  while(q.length){ const id=q.shift(); order.push(id);
+    state.edges.filter(e=>e.from===id).forEach(e=>{ indeg.set(e.to,indeg.get(e.to)-1); if(indeg.get(e.to)===0) q.push(e.to); }); }
+  return order.length===state.nodes.length ? order : state.nodes.map(n=>n.id);
+}
+let running=false;
+async function runPipeline(){
+  if(running) return;
+  if(!hasKey()){ toast('Сначала задайте API-ключ','err'); return openSettings(); }
+  running=true; const btn=$('#run-btn'); btn.disabled=true; btn.textContent='⏳ Работает…';
+  state.nodes.forEach(n=>{ n.status='idle'; n.output=''; n.error=''; }); save(); renderNodes();
+  for(const id of topoOrder()){ const okk=await runNode(id); if(!okk) break; }
+  running=false; btn.disabled=false; btn.textContent='▶ Запустить конвейер';
+  if(state.nodes.every(n=>n.status==='done')) toast('Конвейер завершён ✓','ok');
+}
+
+/* ============ DRAWER / НАСТРОЙКИ ============ */
+const drawer=$('#drawer'), scrim=$('#scrim');
+function openDrawer(title, html, mount){
+  $('#drawer-title').textContent=title; const b=$('#drawer-body'); b.innerHTML=html;
+  drawer.classList.add('show'); scrim.classList.add('show'); if(mount) mount(b);
+}
+function closeDrawer(){ drawer.classList.remove('show'); scrim.classList.remove('show'); }
+$('#drawer-close').onclick=closeDrawer; scrim.onclick=closeDrawer;
+document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeDrawer(); });
+
+function openNode(id){
+  const n=node(id);
+  const outBlock = n.error
+    ? `<div class="deliverable err"><div class="label">Ошибка</div>${esc(n.error)}</div>`
+    : (n.output?`<div class="deliverable"><div class="label">Результат</div>${esc(n.output)}</div>`:'');
+  openDrawer(`${n.emoji} ${esc(n.name)}`, `
+    <div class="row2">
+      <div class="field"><label>Имя</label><input id="f-name" value="${esc(n.name)}"></div>
+      <div class="field"><label>Должность</label><input id="f-role" value="${esc(n.role)}"></div>
     </div>
-  `, body=>{
-    body.querySelector('#rv-approve').onclick = ()=>{ approve(pid,idx); closeDrawer(); };
-    body.querySelector('#rv-return').onclick = ()=>{
-      const note = body.querySelector('#rv-note').value.trim();
-      if(note) s.notes.push(note);
-      s.attempt++; closeDrawer(); runAgent(pid, idx);
-    };
-    body.querySelector('#rv-redo').onclick = ()=>{ s.attempt++; closeDrawer(); runAgent(pid, idx); };
+    <div class="field"><label>Системный промт (описание агента)</label>
+      <textarea id="f-prompt" rows="6">${esc(n.prompt)}</textarea>
+      <div class="hint">Кто этот агент и как он работает. Получает контекст книги и результаты предыдущих агентов.</div></div>
+
+    <div class="section-label">Подключение (API)</div>
+    <label class="check"><input type="checkbox" id="f-global" ${n.useGlobal?'checked':''}> Использовать глобальные настройки</label>
+    <div id="own-cfg" style="${n.useGlobal?'display:none':''}">
+      <div class="field"><label>API base URL</label><input id="f-base" value="${esc(n.baseURL)}" placeholder="${esc(state.global.baseURL)}"></div>
+      <div class="row2">
+        <div class="field"><label>Модель</label><input id="f-model" value="${esc(n.model)}" placeholder="${esc(state.global.model)}"></div>
+        <div class="field"><label>Температура</label><input id="f-temp" type="number" step="0.1" min="0" max="2" value="${n.temperature}"></div>
+      </div>
+      <div class="field"><label>API-ключ агента</label><input id="f-key" type="password" value="${esc(n.apiKey)}" placeholder="оставьте пустым — возьмётся глобальный"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn ok" id="f-save">Сохранить</button>
+      <button class="btn ghost" id="f-run">▶ Прогнать этого агента</button>
+      <button class="btn danger" id="f-del">Удалить агента</button>
+    </div>
+    <div class="section-label">Текущий результат</div>
+    ${outBlock || '<div class="hint" style="color:var(--faint)">Пока пусто — запустите агента.</div>'}
+  `, b=>{
+    b.querySelector('#f-global').onchange=ev=>{ b.querySelector('#own-cfg').style.display=ev.target.checked?'none':''; };
+    const collect=()=>{ n.name=b.querySelector('#f-name').value.trim()||n.name; n.role=b.querySelector('#f-role').value.trim();
+      n.prompt=b.querySelector('#f-prompt').value; n.useGlobal=b.querySelector('#f-global').checked;
+      n.baseURL=b.querySelector('#f-base').value.trim(); n.model=b.querySelector('#f-model').value.trim();
+      n.apiKey=b.querySelector('#f-key').value.trim(); const tv=parseFloat(b.querySelector('#f-temp').value); n.temperature=isNaN(tv)?1.0:tv; };
+    b.querySelector('#f-save').onclick=()=>{ collect(); save(); render(); toast('Сохранено','ok'); };
+    b.querySelector('#f-run').onclick=()=>{ collect(); save(); render(); runNode(n.id); };
+    b.querySelector('#f-del').onclick=()=>{ state.nodes=state.nodes.filter(x=>x.id!==n.id);
+      state.edges=state.edges.filter(e=>e.from!==n.id&&e.to!==n.id); save(); render(); closeDrawer(); toast('Агент удалён'); };
   });
 }
 
-function approve(pid, idx){
-  const p = byId(pid); p.stages[idx].status='done';
-  const next = p.stages[idx+1];
-  if(next) next.status='todo';
-  save(); render();
-}
-
-function exportBook(pid){
-  const p = byId(pid);
-  const parts = p.stages.map(s=>`### ${agentById(s.agentId).name} — ${agentById(s.agentId).role}\n${s.deliverable}`).join('\n\n');
-  const blob = new Blob([`# ${p.title}\n\nЖанр: ${p.genre}\nАудитория: ${p.audience}\n\n${parts}\n`], {type:'text/markdown'});
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href=url; a.download=`${p.title||'book'}.md`; a.click();
-  URL.revokeObjectURL(url);
-}
-
-function editBriefDrawer(aid){
-  const a = agentById(aid); const st = state.agents[aid];
-  openDrawer(`${a.emoji} ${a.name} · инструктаж`, `
-    <p style="color:var(--dim);margin-top:0">Опишите стандарты и вкус этого сотрудника. Это его «обучение» — через эти установки он работает над каждой книгой.</p>
-    <div class="field"><label>Бриф сотрудника</label><textarea id="br-text" rows="8">${esc(st.brief)}</textarea></div>
-    <button class="btn" id="br-save">Сохранить инструктаж</button>
-  `, body=>{
-    body.querySelector('#br-save').onclick = ()=>{
-      st.brief = body.querySelector('#br-text').value.trim() || a.brief;
-      save(); closeDrawer(); render();
-    };
+function openSettings(){
+  const g=state.global;
+  openDrawer('⚙ Глобальные настройки', `
+    <div class="field"><label>API base URL</label><input id="g-base" value="${esc(g.baseURL)}"></div>
+    <div class="row2">
+      <div class="field"><label>Модель по умолчанию</label><input id="g-model" value="${esc(g.model)}"></div>
+      <div class="field"><label>Температура</label><input id="g-temp" type="number" step="0.1" min="0" max="2" value="${g.temperature}"></div>
+    </div>
+    <div class="field"><label>API-ключ (общий для всех агентов)</label>
+      <input id="g-key" type="password" value="${esc(g.apiKey)}" placeholder="sk-...">
+      <div class="hint">Ключ хранится только в этом браузере и уходит на локальный прокси (server.js), а не в сторонние сервисы. Каждому агенту можно задать свой ключ в его настройках.</div></div>
+    <div class="field"><label>Пресеты провайдера</label>
+      <select id="g-preset">
+        <option value="">— выбрать —</option>
+        <option value="https://api.deepseek.com|deepseek-chat">DeepSeek (deepseek-chat)</option>
+        <option value="https://api.deepseek.com|deepseek-reasoner">DeepSeek R1 (deepseek-reasoner)</option>
+        <option value="https://api.openai.com/v1|gpt-4o-mini">OpenAI (gpt-4o-mini)</option>
+      </select></div>
+    <div class="actions"><button class="btn ok" id="g-save">Сохранить</button></div>
+  `, b=>{
+    b.querySelector('#g-preset').onchange=ev=>{ const v=ev.target.value; if(!v) return; const [u,m]=v.split('|');
+      b.querySelector('#g-base').value=u; b.querySelector('#g-model').value=m; };
+    b.querySelector('#g-save').onclick=()=>{ g.baseURL=b.querySelector('#g-base').value.trim()||g.baseURL;
+      g.model=b.querySelector('#g-model').value.trim()||g.model; g.apiKey=b.querySelector('#g-key').value.trim();
+      const tv=parseFloat(b.querySelector('#g-temp').value); g.temperature=isNaN(tv)?1.0:tv; save(); render(); toast('Настройки сохранены','ok'); };
   });
 }
 
-function savePolicy(){
-  state.policy = {
-    reader:$('#pol-reader').value.trim(), loves:$('#pol-loves').value.trim(),
-    hates:$('#pol-hates').value.trim(), tone:$('#pol-tone').value.trim(), taboo:$('#pol-taboo').value.trim(),
-  };
-  save();
-  const btn = document.querySelector('[data-action="save-policy"]');
-  btn.textContent='✓ Сохранено'; setTimeout(()=>btn.textContent='Сохранить политику',1400);
+function openInput(){
+  openDrawer('📄 Исходный текст', `
+    <div class="field"><label>Рукопись для редактирования</label>
+      <textarea id="i-text" rows="16" placeholder="Вставьте текст, который агенты будут редактировать…">${esc(state.project.input)}</textarea></div>
+    <div class="actions"><button class="btn ok" id="i-save">Сохранить</button></div>
+  `, b=>{ b.querySelector('#i-save').onclick=()=>{ state.project.input=b.querySelector('#i-text').value; save(); toast('Исходник сохранён','ok'); closeDrawer(); }; });
 }
 
-/* ============ DRAWER ============ */
-const drawer = $('#drawer'), scrim = $('#scrim');
-function openDrawer(title, html, onMount){
-  $('#drawer-title').textContent = title;
-  const body = $('#drawer-body'); body.innerHTML = html; body.classList.add('fade-in');
-  drawer.classList.add('show'); scrim.classList.add('show'); drawer.setAttribute('aria-hidden','false');
-  if(onMount) onMount(body);
-}
-function closeDrawer(){ drawer.classList.remove('show'); scrim.classList.remove('show'); drawer.setAttribute('aria-hidden','true'); }
-$('#drawer-close').onclick = closeDrawer;
-scrim.onclick = closeDrawer;
+/* ============ ТОСТЫ ============ */
+let toastT;
+function toast(msg, kind=''){ const t=$('#toast'); t.textContent=msg; t.className='toast show '+kind;
+  clearTimeout(toastT); toastT=setTimeout(()=>t.className='toast '+kind, 2600); }
 
 /* ============ СОБЫТИЯ ============ */
-$('#nav').addEventListener('click', e=>{
-  const b = e.target.closest('.nav-item'); if(!b) return;
-  view = b.dataset.view; openId = null; render();
-});
 document.addEventListener('click', e=>{
-  const t = e.target.closest('[data-action]'); if(!t) return;
-  const { action, id, idx } = t.dataset;
-  if(action==='new-project') newProjectDrawer();
-  else if(action==='open-project'){ openId=id; render(); }
-  else if(action==='back'){ openId=null; render(); }
-  else if(action==='assign') assign(id, +idx);
-  else if(action==='autorun') autoRun(id);
-  else if(action==='open-review') reviewDrawer(id, +idx);
-  else if(action==='export') exportBook(id);
-  else if(action==='edit-brief') editBriefDrawer(id);
-  else if(action==='toggle-hire'){ state.agents[id].hired = !state.agents[id].hired; save(); render(); }
-  else if(action==='save-policy') savePolicy();
+  const t=e.target.closest('[data-action]'); if(!t) return;
+  const a=t.dataset.action, id=t.dataset.id;
+  if(a==='run') runPipeline();
+  else if(a==='settings') openSettings();
+  else if(a==='add-node') addNodePicker();
+  else if(a==='auto-layout') autoLayout();
+  else if(a==='edit-input') openInput();
+  else if(a==='open-node') openNode(id);
+  else if(a==='run-node') runNode(id);
 });
-document.addEventListener('keydown', e=>{ if(e.key==='Escape') closeDrawer(); });
+function bindProj(sel, key){ const el=$(sel); el.addEventListener('change',()=>{ state.project[key]=el.value; save(); render(); }); }
+bindProj('#proj-title','title'); bindProj('#proj-genre','genre'); bindProj('#proj-aud','audience');
+bindProj('#proj-brief','brief'); bindProj('#proj-mode','mode');
+
+function autoLayout(){
+  state.nodes.forEach((n,i)=>{ n.x=60+(i%3)*250; n.y=40+Math.floor(i/3)*180; });
+  state.edges=[]; for(let i=0;i<state.nodes.length-1;i++) state.edges.push({id:uid(),from:state.nodes[i].id,to:state.nodes[i+1].id});
+  save(); render(); toast('Схема выстроена в цепочку');
+}
+function addNodePicker(){
+  openDrawer('＋ Добавить агента', `
+    <div class="field"><label>Готовая роль</label><select id="add-tpl">
+      ${TEMPLATES.map((t,i)=>`<option value="${i}">${t.emoji} ${t.name} — ${t.title}</option>`).join('')}
+      <option value="custom">⚙️ Произвольный агент</option>
+    </select></div>
+    <div class="hint">Агент появится на холсте. Связи нарисуйте сами или нажмите «Авто-схема».</div>
+    <div class="actions" style="margin-top:16px"><button class="btn ok" id="add-go">Добавить</button></div>
+  `, b=>{ b.querySelector('#add-go').onclick=()=>{ const v=b.querySelector('#add-tpl').value;
+    const t = v==='custom' ? {name:'Новый агент',title:'роль',emoji:'🤖',prompt:'Ты — агент издательства. Опиши свою роль в промте.'} : TEMPLATES[+v];
+    const sc=$('#canvas'); state.nodes.push(freshNode(t, sc.scrollLeft+80, sc.scrollTop+80)); save(); render(); closeDrawer(); toast('Агент добавлен'); }; });
+}
 
 render();

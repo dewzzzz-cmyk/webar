@@ -3,44 +3,46 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>ИИ-Издательство · Студия</title>
+<title>ИИ-Издательство · Конвейер</title>
 <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="layout">
-  <!-- SIDEBAR -->
-  <aside class="sidebar">
-    <div class="brand">
-      <span class="brand-dot"></span>
-      <div>
-        <div class="brand-name" id="studio-name">ИИ-Издательство</div>
-        <div class="brand-sub">студия</div>
-      </div>
-    </div>
-    <nav class="nav" id="nav">
-      <button class="nav-item active" data-view="projects"><span>📚</span> Проекты <i class="nav-badge" id="nav-review">0</i></button>
-      <button class="nav-item" data-view="staff"><span>👥</span> Штат</button>
-      <button class="nav-item" data-view="policy"><span>🎯</span> Редполитика</button>
-    </nav>
-    <div class="sidebar-foot">
-      <div class="kpi"><div class="kpi-v" id="kpi-books">0</div><div class="kpi-k">книг в работе</div></div>
-      <div class="kpi"><div class="kpi-v" id="kpi-done">0</div><div class="kpi-k">выпущено</div></div>
-    </div>
-  </aside>
+<header class="topbar">
+  <div class="brand"><span class="brand-dot"></span> ИИ-Издательство</div>
+  <input id="proj-title" class="title-input" placeholder="Название книги…">
+  <div class="spacer"></div>
+  <span class="hint-pill" id="api-state">● ключ не задан</span>
+  <button class="btn ghost" data-action="add-node">＋ Агент</button>
+  <button class="btn ghost" data-action="auto-layout">⤢ Авто-схема</button>
+  <button class="btn ghost" data-action="settings">⚙ Настройки</button>
+  <button class="btn primary" data-action="run" id="run-btn">▶ Запустить конвейер</button>
+</header>
 
-  <!-- MAIN -->
-  <main class="main" id="main"><!-- views injected here --></main>
+<div class="projbar">
+  <input id="proj-genre" placeholder="Жанр">
+  <input id="proj-aud" placeholder="Аудитория">
+  <input id="proj-brief" class="grow" placeholder="Бриф / задача для команды">
+  <select id="proj-mode">
+    <option value="write">✒️ писать с нуля</option>
+    <option value="edit">📖 редактировать исходник</option>
+  </select>
+  <button class="btn ghost sm" data-action="edit-input" id="input-btn">📄 Исходник</button>
 </div>
 
-<!-- DRAWER (review / forms) -->
+<div class="canvas" id="canvas">
+  <svg class="edges" id="edges"></svg>
+  <div class="nodes" id="nodes"></div>
+  <div class="canvas-hint" id="canvas-hint"></div>
+</div>
+
 <div class="drawer-scrim" id="scrim"></div>
 <section class="drawer" id="drawer" aria-hidden="true">
-  <header class="drawer-head">
-    <div class="drawer-title" id="drawer-title">—</div>
-    <button class="icon-btn" id="drawer-close">✕</button>
-  </header>
+  <header class="drawer-head"><div class="drawer-title" id="drawer-title">—</div>
+    <button class="icon-btn" id="drawer-close">✕</button></header>
   <div class="drawer-body" id="drawer-body"></div>
 </section>
+
+<div class="toast" id="toast"></div>
 
 <script src="app.js"></script>
 </body>
