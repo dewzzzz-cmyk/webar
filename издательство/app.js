@@ -71,11 +71,17 @@ const hasKey=()=> state.nodes.some(n=>cfg(n).apiKey) || !!state.global.apiKey;
 const wait=ms=>new Promise(r=>setTimeout(r,ms));
 
 /* ============ КОНТЕКСТ + БИБЛИЯ ============ */
+const RU_ENDS=['иями','ями','ами','его','ого','ему','ому','ыми','ими','ах','ях','ам','ям','ом','ем','ой','ей','ою','ею','ью','ие','ые','ий','ый','ая','яя','ое','ее','ы','и','а','я','у','ю','е','о','ь','й'];
+function stem(w){ w=(w||'').toLowerCase().replace(/ё/g,'е'); for(const e of RU_ENDS){ if(w.length-e.length>=3 && w.endsWith(e)) return w.slice(0,-e.length); } return w; }
+function stemSet(text){ const s=new Set(); (text.match(/[a-zа-я0-9]+/gi)||[]).forEach(w=>s.add(stem(w))); return s; }
+function keyMatches(key, low, sset){ return key.split(/\s+/).filter(Boolean).every(p=> low.includes(p) || sset.has(stem(p)) ); }
 function bibleFor(text){
-  const low=(text||'').toLowerCase();
+  const low=(text||'').toLowerCase(); const sset=stemSet(low);
   return state.bible.filter(b=>{ const keys=(b.keys||'').split(',').map(s=>s.trim().toLowerCase()).filter(Boolean);
-    return !keys.length || keys.some(k=>low.includes(k)); }).map(b=>`• ${b.keys||'канон'}: ${b.text}`).join('\n');
+    return !keys.length || keys.some(k=>keyMatches(k,low,sset)); }).map(b=>`• ${b.keys||'канон'}: ${b.text}`).join('\n');
 }
+function parseBibleLines(text){ return (text||'').split('\n').map(l=>l.trim()).filter(l=>l.includes('|'))
+  .map(l=>{ const i=l.indexOf('|'); return { keys:l.slice(0,i).replace(/^[-•*\d.)\s]+/,'').trim(), text:l.slice(i+1).trim() }; }).filter(e=>e.text); }
 function buildMessages(n){
   const pr=state.project;
   const preds=state.edges.filter(e=>e.to===n.id).map(e=>node(e.from)).filter(Boolean);
@@ -306,11 +312,35 @@ function openBible(){
   openDrawer('📖 Библия книги',`
     <p class="hint" style="margin-top:0">Канон книги. Запись подмешивается в контекст агента, когда её ключ встречается в тексте (пустые ключи — всегда). Защищает от противоречий и дрейфа.</p>
     <div id="bible-list">${rows||'<div class="hint" style="color:var(--faint)">Пока пусто.</div>'}</div>
-    <div class="actions" style="margin-top:14px"><button class="btn ghost" id="b-add">＋ Запись</button><button class="btn ok" id="b-save">Сохранить</button></div>
+    <div class="actions" style="margin-top:14px"><button class="btn ghost" id="b-add">＋ Запись</button>
+      <button class="btn ghost" id="b-auto">🪄 Собрать из текста</button>
+      <button class="btn ok" id="b-save">Сохранить</button></div>
+    <div class="hint">«Собрать из текста» — архивариус извлечёт канон из исходника и результатов агентов (нужен API-ключ).</div>
   `,b=>{
     b.querySelector('#b-add').onclick=()=>{ state.bible.push({id:uid(),keys:'',text:''}); save(); openBible(); };
+    b.querySelector('#b-auto').onclick=autoBuildBible;
     b.querySelectorAll('[data-delbible]').forEach(x=>x.onclick=()=>{ state.bible=state.bible.filter(e=>e.id!==x.dataset.delbible); save(); openBible(); });
     b.querySelector('#b-save').onclick=()=>{ b.querySelectorAll('.bible-row').forEach(r=>{ const e=state.bible.find(x=>x.id===r.dataset.bid); if(e){ e.keys=r.querySelector('.bk').value.trim(); e.text=r.querySelector('.bt').value.trim(); } }); save(); toast('Библия сохранена','ok'); closeDrawer(); }; });
+}
+async function autoBuildBible(){
+  if(!hasKey()){ toast('Задайте API-ключ','err'); return openSettings(); }
+  const src=[state.project.input, ...state.nodes.filter(n=>n.output).map(n=>n.output)].filter(Boolean).join('\n\n');
+  if(!src.trim()){ toast('Нет текста: заполните исходник или запустите агентов','err'); return; }
+  const c=state.global;
+  const msgs=[ {role:'system',content:'Ты — архивариус издательства. Извлеки канон книги: персонажи, места, правила мира, важные факты, таймлайн. Верни строки строго в формате «КЛЮЧИ | ФАКТ», где ключи — имена/слова через запятую, по которым факт находится. Только строки, без нумерации и пояснений.'},
+    {role:'user',content:'Текст:\n'+src.slice(0,12000)} ];
+  toast('Собираю библию…');
+  try{
+    const res=await fetch('/api/generate',{ method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ baseURL:c.baseURL, apiKey:c.apiKey, model:c.model, temperature:0.3, proxyToken:c.proxyToken, messages:msgs }) });
+    if(!res.ok) throw new Error('HTTP '+res.status+': '+(await res.text()).slice(0,120));
+    const reader=res.body.getReader(), dec=new TextDecoder(); let acc='';
+    while(true){ const {value,done}=await reader.read(); if(done) break; acc+=dec.decode(value,{stream:true}); }
+    const entries=parseBibleLines(acc);
+    if(!entries.length) throw new Error('не удалось разобрать ответ модели');
+    entries.forEach(e=>state.bible.push({id:uid(),keys:e.keys,text:e.text}));
+    logRow('Архивариус','ok','библия: +'+entries.length); save(); openBible(); toast('Добавлено записей: '+entries.length,'ok');
+  }catch(err){ logRow('Архивариус','error',String(err.message)); toast('Не удалось: '+err.message,'err'); }
 }
 function openLog(){
   const rows=state.log.length?state.log.map(l=>`<div class="logrow l-${l.status}"><span class="lt">${new Date(l.t).toLocaleTimeString('ru-RU')}</span>
